@@ -1,0 +1,40 @@
+# herdr-ios-simulator: an iOS Simulator in a herdr pane. Agents drive it with the
+# `herdr-ios-simulator` CLI (simctl for devices, apps and logs; AXe for touch and video).
+
+id = "herdr-ios-simulator"
+name = "herdr-ios-simulator"
+version = "0.1.0" # x-release-please-version
+description = "An iOS Simulator beside your coding agent: a live view you can tap, and a CLI for agents to build, run, drive and read the app's logs and crashes."
+min_herdr_version = "0.9.0"
+platforms = ["macos"]
+
+[[build]]
+command = ["cargo", "build", "--release"]
+
+# Put `herdr-ios-simulator` on PATH (~/.local/bin) so agents can call it; replaces its own symlink.
+[[startup]]
+command = ["./target/release/herdr-ios-simulator", "install-cli"]
+
+[[panes]]
+id = "simulator"
+title = "Simulator"
+placement = "split"
+command = ["./target/release/herdr-ios-simulator", "pane"]
+
+[[actions]]
+id = "open"
+title = "Simulator: open"
+description = "Boot the simulator if needed and show it in a pane."
+command = ["/bin/sh", "-c", "exec \"$HERDR_BIN_PATH\" plugin pane open --plugin herdr-ios-simulator --entrypoint simulator"]
+
+[[actions]]
+id = "shutdown"
+title = "Simulator: shut down"
+description = "Shut the current simulator down."
+command = ["./target/release/herdr-ios-simulator", "shutdown"]
+
+[[actions]]
+id = "install-cli"
+title = "Simulator: install CLI"
+description = "Symlink herdr-ios-simulator into ~/.local/bin so agents can call it."
+command = ["./target/release/herdr-ios-simulator", "install-cli"]

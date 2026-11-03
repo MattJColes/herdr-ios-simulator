@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" font-family="Menlo, monospace" font-size="13">
+  <rect width="960" height="540" rx="10" fill="#1e1f24"/>
+  <rect width="960" height="30" rx="10" fill="#2a2b31"/>
+  <circle cx="20" cy="15" r="6" fill="#ff5f57"/><circle cx="40" cy="15" r="6" fill="#febc2e"/><circle cx="60" cy="15" r="6" fill="#28c840"/>
+  <text x="480" y="20" fill="#9a9ba3" text-anchor="middle">herdr — MyApp</text>
+
+  <!-- agent pane -->
+  <rect x="10" y="40" width="520" height="490" rx="6" fill="#16171b" stroke="#33343b"/>
+  <text x="24" y="64" fill="#c792ea">claude</text>
+  <text x="24" y="92" fill="#e6e6e6">&gt; the sign in button does nothing, fix it</text>
+  <text x="24" y="124" fill="#9a9ba3">● herdr-ios-simulator launch com.example.MyApp --show</text>
+  <text x="24" y="146" fill="#9a9ba3">● herdr-ios-simulator tap 4</text>
+  <text x="24" y="168" fill="#9a9ba3">● herdr-ios-simulator logs --errors</text>
+  <text x="40" y="190" fill="#ff8b8b">error  AuthService: invalid URL "api/login"</text>
+  <text x="40" y="210" fill="#ff8b8b">       AuthService.swift:42</text>
+  <text x="24" y="242" fill="#e6e6e6">The base URL is missing. Fixing AuthService.swift,</text>
+  <text x="24" y="262" fill="#e6e6e6">rebuilding and tapping Sign in again.</text>
+  <text x="24" y="294" fill="#9a9ba3">● herdr-ios-simulator build --scheme MyApp</text>
+  <text x="40" y="316" fill="#7fd88f">build succeeded, 0 errors</text>
+  <text x="24" y="338" fill="#9a9ba3">● herdr-ios-simulator tap 4</text>
+  <text x="40" y="360" fill="#7fd88f">event  navigated: HomeView</text>
+
+  <!-- simulator pane -->
+  <rect x="540" y="40" width="410" height="490" rx="6" fill="#16171b" stroke="#33343b"/>
+  <text x="556" y="64" fill="#e6e6e6">iPhone 17 Pro · iOS 26</text>
+  <text x="934" y="64" fill="#9a9ba3" text-anchor="end">⌂  ⟳  ◐  ◎  ⧉</text>
+  <rect x="650" y="80" width="190" height="380" rx="28" fill="#000" stroke="#4a4b52" stroke-width="3"/>
+  <rect x="660" y="90" width="170" height="360" rx="20" fill="#f4f5f7"/>
+  <rect x="715" y="96" width="60" height="14" rx="7" fill="#000"/>
+  <text x="745" y="170" fill="#111" text-anchor="middle" font-family="-apple-system, Helvetica" font-size="18" font-weight="600">Welcome</text>
+  <rect x="680" y="200" width="130" height="28" rx="6" fill="#fff" stroke="#d0d2d8"/>
+  <text x="690" y="219" fill="#9a9ba3" font-family="-apple-system, Helvetica" font-size="12">Email</text>
+  <rect x="680" y="238" width="130" height="28" rx="6" fill="#fff" stroke="#d0d2d8"/>
+  <text x="690" y="257" fill="#9a9ba3" font-family="-apple-system, Helvetica" font-size="12">Password</text>
+  <rect x="680" y="284" width="130" height="32" rx="8" fill="#0a84ff"/>
+  <text x="745" y="305" fill="#fff" text-anchor="middle" font-family="-apple-system, Helvetica" font-size="13" font-weight="600">Sign in</text>
+  <circle cx="745" cy="300" r="16" fill="none" stroke="#febc2e" stroke-width="2"/>
+  <line x1="550" y1="474" x2="940" y2="474" stroke="#33343b"/>
+  <text x="556" y="494" fill="#9a9ba3" font-size="12">12:04:31 launch  com.example.MyApp</text>
+  <text x="556" y="514" fill="#ff8b8b" font-size="12">12:04:33 error   invalid URL "api/login"</text>
+  <text x="940" y="534" fill="#5a5b63" font-size="10" text-anchor="end">mockup</text>
+</svg>
