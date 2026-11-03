@@ -28,19 +28,14 @@ fn run(args: &[&str], udid: &str) -> R<String> {
 }
 
 // AXe's default tap and an un-held button send down and up together, which the simulator
-// drops on Xcode 27 (axe reports success, nothing happens); a real touch and a 0.1s hold land.
+// drops on Xcode 27 (axe reports success, nothing happens); a real touch lands, and Home needs a
+// 0.2s hold (0.1s works only sometimes; Siri needs much longer).
 pub fn tap(udid: &str, x: f64, y: f64) -> R<()> {
     run(&["tap", "-x", &format!("{x:.1}"), "-y", &format!("{y:.1}"), "--tap-style", "physical"], udid).map(drop)
 }
 
-pub fn swipe(udid: &str, from: (f64, f64), to: (f64, f64), secs: f64) -> R<()> {
-    let n = |v: f64| format!("{v:.1}");
-    run(&["swipe", "--start-x", &n(from.0), "--start-y", &n(from.1), "--end-x", &n(to.0), "--end-y", &n(to.1), "--duration", &n(secs)], udid)
-        .map(drop)
-}
-
 /// A finger drag with explicit touch moves over `secs`: scrolls by about its length when
-/// slow, and flings when quick, like a real touch. (`swipe` flings even when slow.)
+/// slow, and flings when quick, like a real touch. (`axe swipe` flings even when slow.)
 pub fn drag(udid: &str, from: (f64, f64), to: (f64, f64), secs: f64) -> R<()> {
     let n = |v: f64| format!("{v:.1}");
     let steps = ((secs * 60.0) as u32).clamp(10, 120).to_string();
@@ -91,7 +86,7 @@ pub fn button(udid: &str, b: Button) -> R<()> {
         Button::Side => "side-button",
         Button::Siri => "siri",
     };
-    run(&["button", name, "--duration", "0.1"], udid).map(drop)
+    run(&["button", name, "--duration", "0.2"], udid).map(drop)
 }
 
 /// Start `axe stream-video --format raw`: each frame is a 4-byte big-endian length then JPEG bytes.
