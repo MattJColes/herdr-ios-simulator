@@ -39,6 +39,29 @@ pub fn swipe(udid: &str, from: (f64, f64), to: (f64, f64), secs: f64) -> R<()> {
         .map(drop)
 }
 
+/// A finger drag with explicit touch moves over `secs`: scrolls by about its length when
+/// slow, and flings when quick, like a real touch. (`swipe` flings even when slow.)
+pub fn drag(udid: &str, from: (f64, f64), to: (f64, f64), secs: f64) -> R<()> {
+    let n = |v: f64| format!("{v:.1}");
+    let steps = ((secs * 60.0) as u32).clamp(10, 120).to_string();
+    let args = [
+        "drag",
+        "--start-x",
+        &n(from.0),
+        "--start-y",
+        &n(from.1),
+        "--end-x",
+        &n(to.0),
+        "--end-y",
+        &n(to.1),
+        "--duration",
+        &n(secs),
+        "--steps",
+        &steps,
+    ];
+    run(&args, udid).map(drop)
+}
+
 pub fn type_text(udid: &str, text: &str) -> R<()> {
     run(&["type", text], udid).map(drop)
 }

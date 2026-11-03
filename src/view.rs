@@ -16,6 +16,24 @@ use std::time::{Duration, Instant};
 
 /// The device image starts below the one-line header.
 const TOP: u16 = 1;
+/// Device points scrolled per wheel tick, and the pause that ends a scroll.
+const WHEEL_STEP: f64 = 40.0;
+const WHEEL_IDLE: Duration = Duration::from_millis(150);
+
+type Input = Box<dyn FnOnce(&str) -> R<()> + Send>;
+
+/// The thread that runs input for the device, in order; errors go to the header.
+fn input_thread(udid: String, tx: Sender<Msg>) -> Sender<Input> {
+    let (send, recv) = mpsc::channel::<Input>();
+    std::thread::spawn(move || {
+        for f in recv {
+            if let Err(e) = f(&udid) {
+                let _ = tx.send(Msg::Say(format!("error: {e}")));
+            }
+        }
+    });
+    send
+}
 
 /// Frames and stream ends carry the stream generation, so a replaced stream's last frames are dropped.
 enum Msg {
@@ -219,7 +237,10 @@ struct View {
     flip: bool,
     message: String,
     message_at: Instant,
-    press: Option<(u16, u16)>,
+    press: Option<(u16, u16, Instant)>,
+    /// Wheel scrolling not yet sent: start point, distance and when it last moved.
+    wheel: Option<(f64, f64, f64, Instant)>,
+    inputs: Sender<Input>,
     typed: String,
     /// Header column under the mouse.
     hover: Option<u16>,
@@ -247,14 +268,18 @@ impl View {
         Ok(())
     }
 
-    /// Run `f` off the UI thread; failures show in the header.
+    /// Queue `f` for the input thread, which runs one at a time in order: each axe call takes
+    /// ~1s to start, and overlapping touches cancel each other. Failures show in the header.
     fn input(&self, f: impl FnOnce(&str) -> R<()> + Send + 'static) {
-        let (udid, tx) = (self.dev.udid.clone(), self.tx.clone());
-        std::thread::spawn(move || {
-            if let Err(e) = f(&udid) {
-                let _ = tx.send(Msg::Say(format!("error: {e}")));
-            }
-        });
+        let _ = self.inputs.send(Box::new(f));
+    }
+
+    /// Send the scrolling gathered since the wheel last moved as one drag.
+    fn flush_wheel(&mut self) {
+        let Some((x, y, dy, _)) = self.wheel.take() else { return };
+        let Some(screen) = self.screen else { return };
+        let to = (x, (y + dy).clamp(1.0, screen.1 - 1.0));
+        self.input(move |u| axe::drag(u, (x, y), to, 0.5));
     }
 
     /// The header's status text: a hovered button's name, else a recent message.
@@ -429,9 +454,9 @@ impl View {
                     return self.act(h.act);
                 }
             }
-            MouseEventKind::Down(MouseButton::Left) => self.press = at.is_some().then_some((m.column, m.row)),
+            MouseEventKind::Down(MouseButton::Left) => self.press = at.is_some().then_some((m.column, m.row, Instant::now())),
             MouseEventKind::Up(MouseButton::Left) => {
-                let Some((c0, r0)) = self.press.take() else { return true };
+                let Some((c0, r0, t0)) = self.press.take() else { return true };
                 let Some(from) = placed.points_at(c0, r0, screen) else { return true };
                 let to = placed
                     .points_at(m.column.clamp(placed.left, placed.left + placed.cols - 1), m.row.clamp(TOP, TOP + placed.rows - 1), screen)
@@ -442,14 +467,17 @@ impl View {
                     self.input(move |u| axe::tap(u, from.0, from.1));
                 } else {
                     let _ = state::event(&udid, "user swipe", &format!("{:.0},{:.0} -> {:.0},{:.0}", from.0, from.1, to.0, to.1));
-                    self.input(move |u| axe::swipe(u, from, to, 0.3));
+                    // Replay at the speed it was dragged: slow drags scroll by their length, flicks fling.
+                    let secs = t0.elapsed().as_secs_f64().clamp(0.1, 2.0);
+                    self.input(move |u| axe::drag(u, from, to, secs));
                 }
             }
             MouseEventKind::ScrollDown | MouseEventKind::ScrollUp => {
                 if let Some((x, y)) = at {
-                    let dy = if m.kind == MouseEventKind::ScrollDown { -120.0 } else { 120.0 };
-                    let to = (x, (y + dy).clamp(1.0, screen.1 - 1.0));
-                    self.input(move |u| axe::swipe(u, (x, y), to, 0.15));
+                    let step = if m.kind == MouseEventKind::ScrollDown { -WHEEL_STEP } else { WHEEL_STEP };
+                    let (x, y, dy, _) = self.wheel.unwrap_or((x, y, 0.0, Instant::now()));
+                    let cap = screen.1 * 0.6;
+                    self.wheel = Some((x, y, (dy + step).clamp(-cap, cap), Instant::now()));
                 }
             }
             _ => {}
@@ -466,6 +494,7 @@ pub fn run(cfg: Config, device: Option<&str>) -> R<()> {
     let dev = sim::boot(&cfg, device)?;
     let (cells, renderer) = render::detect(&cfg);
     let (tx, rx) = mpsc::channel();
+    let (udid, tx2) = (dev.udid.clone(), tx.clone());
     let mut v = View {
         cfg,
         dev,
@@ -481,6 +510,8 @@ pub fn run(cfg: Config, device: Option<&str>) -> R<()> {
         message: String::new(),
         message_at: Instant::now() - Duration::from_secs(60),
         press: None,
+        wheel: None,
+        inputs: input_thread(udid, tx2),
         typed: String::new(),
         hover: None,
         hits: Vec::new(),
@@ -530,6 +561,9 @@ fn event_loop(v: &mut View, rx: &Receiver<Msg>) -> R<()> {
         }
         if !event::poll(Duration::from_millis(30))? {
             v.flush_typing();
+            if v.wheel.is_some_and(|w| w.3.elapsed() > WHEEL_IDLE) {
+                v.flush_wheel();
+            }
             continue;
         }
         loop {
