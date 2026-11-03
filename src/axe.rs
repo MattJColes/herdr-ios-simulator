@@ -9,8 +9,13 @@ use std::process::{Child, Command, Stdio};
 
 const INSTALL: &str = "AXe is not installed. Install it with: brew install cameroncooke/axe/axe";
 
+fn bin() -> &'static str {
+    // Homebrew's AXe first: Amazon's toolbox ships an unrelated `axe` that often comes earlier in PATH.
+    ["/opt/homebrew/bin/axe", "/usr/local/bin/axe"].into_iter().find(|p| std::path::Path::new(p).exists()).unwrap_or("axe")
+}
+
 fn cmd(args: &[&str], udid: &str) -> Command {
-    let mut c = Command::new("axe");
+    let mut c = Command::new(bin());
     c.args(args).args(["--udid", udid]);
     c
 }
