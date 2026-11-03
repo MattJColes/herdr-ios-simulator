@@ -155,6 +155,8 @@ enum Cmd {
     MenuOpen,
     /// Print usage notes for agents.
     AgentHelp,
+    /// Print the agent skill (skills/herdr-ios-simulator/SKILL.md) for any coding agent.
+    Skill,
     /// The live view (herdr runs this in the pane).
     #[command(hide = true)]
     Pane,
@@ -488,6 +490,7 @@ fn run(cli: Cli) -> R<()> {
             }
         }
         Cmd::AgentHelp => println!("{AGENT_HELP}"),
+        Cmd::Skill => print!("{}", agent_setup::SKILL),
         Cmd::Pane => view::run(cfg, cli.device.as_deref())?,
     }
     Ok(())
