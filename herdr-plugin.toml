@@ -46,6 +46,12 @@ description = "Send the app's errors and crashes from the last 5 minutes to an a
 command = ["./target/release/herdr-ios", "send", "errors"]
 
 [[actions]]
+id = "install-agents"
+title = "Simulator: set up agents"
+description = "Teach Claude Code, Codex, OpenCode and Pi to use herdr-ios for iOS apps, in every project."
+command = ["./target/release/herdr-ios", "install-agents"]
+
+[[actions]]
 id = "install-desktop"
 title = "Simulator: add to herdr desktop's + menu"
 description = "Add iOS Simulator to herdr desktop's + menu."

@@ -65,6 +65,15 @@ pub struct State {
     pub app: Option<String>,
     /// Its pid, so `crashes` knows whether the captured stderr belongs to a crash.
     pub pid: Option<u64>,
+    /// An agent's `pick` waiting for the user to click an element in the View.
+    pub pick: Option<Pick>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+pub struct Pick {
+    pub prompt: String,
+    /// Set by the View: the element (`n`, `line`, `element`), or `{"cancelled": true}`.
+    pub answer: Option<Value>,
 }
 
 // ponytail: no lock; last writer wins, add a file lock if concurrent writers show up.

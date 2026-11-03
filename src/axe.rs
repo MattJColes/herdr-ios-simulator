@@ -206,6 +206,19 @@ pub fn element(udid: &str, n: usize) -> R<Element> {
     n.checked_sub(1).and_then(|i| els.get(i)).cloned().ok_or_else(|| format!("no element [{n}]; run `herdr-ios ui` again").into())
 }
 
+/// Index of the element under `p`: the smallest one containing it, preferring controls over
+/// the text and images inside them, so a click on a button's label picks the button.
+pub fn element_at(els: &[Element], p: (f64, f64)) -> Option<usize> {
+    let inside = |e: &Element| p.0 >= e.frame[0] && p.0 < e.frame[0] + e.frame[2] && p.1 >= e.frame[1] && p.1 < e.frame[1] + e.frame[3];
+    let area = |e: &Element| e.frame[2] * e.frame[3];
+    let content = |e: &Element| matches!(e.kind.as_str(), "StaticText" | "Image");
+    let hits: Vec<usize> = (0..els.len()).filter(|&i| inside(&els[i])).collect();
+    let smallest = |only_controls: bool| {
+        hits.iter().copied().filter(|&i| !only_controls || !content(&els[i])).min_by(|&a, &b| area(&els[a]).total_cmp(&area(&els[b])))
+    };
+    smallest(true).or_else(|| smallest(false))
+}
+
 /// Screen size in points, from the accessibility tree's root.
 pub fn screen_points(udid: &str) -> R<(f64, f64)> {
     parse_tree(&describe_raw(udid)?).1.ok_or_else(|| "cannot read the screen size from axe describe-ui".into())
@@ -246,6 +259,16 @@ mod tests {
             { "type": "StaticText", "AXLabel": "9:55\u{202f}pm\u{200e}", "frame": { "x": 10, "y": 10, "width": 60, "height": 20 } } ] }]);
         let lines: Vec<String> = parse_tree(&t).0.iter().enumerate().map(|(i, e)| e.line(i + 1)).collect();
         assert_eq!(lines, ["[1] TextField value=\"Name\" id=name", "[2] StaticText \"9:55 pm\""]);
+    }
+
+    #[test]
+    fn element_at_prefers_the_control_under_its_label() {
+        let el = |kind: &str, frame: [f64; 4]| Element { kind: kind.into(), label: "x".into(), value: String::new(), id: String::new(), frame };
+        let els = [el("Group", [0.0, 0.0, 400.0, 800.0]), el("Button", [10.0, 100.0, 300.0, 50.0]), el("StaticText", [20.0, 110.0, 80.0, 20.0])];
+        assert_eq!(element_at(&els, (30.0, 120.0)), Some(1));
+        assert_eq!(element_at(&els, (350.0, 500.0)), Some(0));
+        assert_eq!(element_at(&[els[2].clone()], (30.0, 120.0)), Some(0));
+        assert_eq!(element_at(&els, (500.0, 500.0)), None);
     }
 
     #[test]
