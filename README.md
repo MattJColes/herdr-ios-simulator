@@ -55,6 +55,14 @@ For herdr desktop, add **iOS Simulator** to its + menu (it opens as a split besi
 herdr-ios install-desktop
 ```
 
+To have Claude Code, Codex, OpenCode and Pi reach for `herdr-ios` whenever you ask to run or debug an iOS app, in every project:
+
+```sh
+herdr-ios install-agents
+```
+
+This writes a Claude Code skill to `~/.claude/skills/herdr-ios-simulator/` and adds a short marked section to the other agents' global `AGENTS.md`. Running it again replaces that section rather than adding another.
+
 ## Update
 
 ```sh
@@ -75,6 +83,7 @@ That unregisters the plugin but leaves its link, settings and recorded state in 
 rm ~/.local/bin/herdr-ios
 rm -rf ~/.local/state/herdr/plugins/herdr-ios-simulator
 rm -rf ~/.config/herdr/plugins/config/herdr-ios-simulator
+rm -rf ~/.claude/skills/herdr-ios-simulator   # and the herdr-ios-simulator section in ~/.codex, ~/.config/opencode and ~/.pi/agent AGENTS.md
 rm ~/.config/herdr-app/icons/herdr-ios-simulator.svg   # and the herdr-ios-simulator entry in ~/.config/herdr-app/programs.json
 ```
 
@@ -93,6 +102,7 @@ herdr-ios logs --errors --since before-login
 herdr-ios crashes
 herdr-ios screenshot /tmp/screen.png
 herdr-ios send screenshot                 # put it in an agent's prompt (default: the agent beside you)
+herdr-ios pick --prompt "Which button?"   # the user clicks it in the view: [7] Button "Sign in", then tap 7
 ```
 
 `herdr-ios agent-help` prints the full list. Add `--json` to any command for structured output, and `--device NAME` to pick a simulator when several are booted.
@@ -109,6 +119,7 @@ herdr-ios send screenshot                 # put it in an agent's prompt (default
 | Ctrl-O | Home |
 | Ctrl-X | Send a screenshot to the agent |
 | Ctrl-Q | Close the view (the simulator keeps running) |
+| Esc | Cancel an agent's pick (the header shows its question while it waits for your click) |
 
 Sends go to the agent in the same herdr space as the view. Pass `--agent NAME` to `herdr-ios send` to pick another. herdr's command palette also has **Simulator: send screenshot to agent** and **Simulator: send errors to agent**.
 

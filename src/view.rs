@@ -22,6 +22,17 @@ const WHEEL_IDLE: Duration = Duration::from_millis(150);
 
 type Input = Box<dyn FnOnce(&str) -> R<()> + Send>;
 
+/// Answer the agent's pick with the element under `p`. Numbered as `ui` numbers them (and
+/// saved as the last `ui`), so the agent can `tap n` straight away.
+fn answer_pick(udid: &str, p: (f64, f64)) -> R<()> {
+    let els = axe::describe(udid)?;
+    let i = axe::element_at(&els, p).ok_or("nothing to pick there; click an element")?;
+    let line = els[i].line(i + 1);
+    let answer = serde_json::json!({ "n": i + 1, "line": line, "element": els[i] });
+    state::update(|s| s.pick.iter_mut().for_each(|pk| pk.answer = Some(answer.clone())))?;
+    state::event(udid, "user pick", &line)
+}
+
 /// The thread that runs input for the device, in order; errors go to the header.
 fn input_thread(udid: String, tx: Sender<Msg>) -> Sender<Input> {
     let (send, recv) = mpsc::channel::<Input>();
@@ -244,6 +255,8 @@ struct View {
     typed: String,
     /// Header column under the mouse.
     hover: Option<u16>,
+    /// An agent's `pick` prompt: the next click picks an element instead of tapping.
+    pick: Option<String>,
     hits: Vec<Hit>,
     /// Header bytes as last written; redraw only on change.
     drawn: Vec<u8>,
@@ -286,6 +299,9 @@ impl View {
     fn status(&self) -> (String, Rgb) {
         if let Some(h) = self.hover.and_then(|c| self.hits.iter().find(|h| (h.x0..h.x1).contains(&c))) {
             return (h.act.describe().into(), FG);
+        }
+        if let Some(p) = &self.pick {
+            return (format!("{p} · click it · Esc cancels"), OK);
         }
         if self.message_at.elapsed() < Duration::from_secs(6) {
             return (self.message.clone(), if self.message.starts_with("error") { ERR } else { OK });
@@ -425,6 +441,10 @@ impl View {
         let ctrl = k.modifiers.contains(KeyModifiers::CONTROL);
         match k.code {
             KeyCode::Char('q') if ctrl => return false,
+            KeyCode::Esc if self.pick.take().is_some() => {
+                self.say("pick cancelled");
+                self.input(|_| state::update(|s| s.pick.iter_mut().for_each(|p| p.answer = Some(serde_json::json!({ "cancelled": true })))));
+            }
             KeyCode::Char('o') if ctrl => return self.act(Act::Home),
             KeyCode::Char('x') if ctrl => return self.act(Act::SendShot),
             KeyCode::Char(c) if !ctrl => self.typed.push(c),
@@ -462,7 +482,10 @@ impl View {
                     .points_at(m.column.clamp(placed.left, placed.left + placed.cols - 1), m.row.clamp(TOP, TOP + placed.rows - 1), screen)
                     .unwrap_or(from);
                 let udid = self.dev.udid.clone();
-                if c0.abs_diff(m.column) + r0.abs_diff(m.row) <= 1 {
+                if c0.abs_diff(m.column) + r0.abs_diff(m.row) <= 1 && self.pick.take().is_some() {
+                    self.say("picked");
+                    self.input(move |u| answer_pick(u, from));
+                } else if c0.abs_diff(m.column) + r0.abs_diff(m.row) <= 1 {
                     let _ = state::event(&udid, "user tap", &format!("{:.0},{:.0}", from.0, from.1));
                     self.input(move |u| axe::tap(u, from.0, from.1));
                 } else {
@@ -514,6 +537,7 @@ pub fn run(cfg: Config, device: Option<&str>) -> R<()> {
         inputs: input_thread(udid, tx2),
         typed: String::new(),
         hover: None,
+        pick: None,
         hits: Vec::new(),
         drawn: Vec::new(),
     };
@@ -528,6 +552,8 @@ fn event_loop(v: &mut View, rx: &Receiver<Msg>) -> R<()> {
     loop {
         if last_tick.elapsed() >= Duration::from_secs(1) {
             last_tick = Instant::now();
+            // The agent's pick request, if any, shows within a second.
+            v.pick = state::load().pick.filter(|p| p.answer.is_none()).map(|p| p.prompt);
             if let Err(e) = v.ensure_stream() {
                 v.say(format!("error: {e}"));
             }

@@ -81,7 +81,7 @@ anything.
 
 ### 4. Send to the agent
 
-**Screenshot and errors done** (`send`, the header's buttons, herdr actions); `pick` is next.
+**Done**: `send` (header buttons, herdr actions) and `pick`.
 
 - Screenshot and recent errors to the agent, through `herdr agent prompt`, using the browser's
   "which agent gets it" order.
@@ -92,7 +92,8 @@ Done when: one click in the View puts a screenshot in the agent's prompt.
 ### 5. herdr integration
 
 - `install-agents` teaches Claude Code, Codex, OpenCode and Pi to use `herdr-ios`. Re-running it
-  after an update replaces its own section. **Next, with section 4.**
+  after an update replaces its own section. **Done.**
+- `install-desktop` adds iOS Simulator to herdr desktop's + menu. **Done.**
 - `uninstall` undoes everything the plugin added outside herdr: the CLI symlink and the agent
   instructions. It leaves Xcode, simulators and AXe, which other tools share. **Next, with
   section 4.** Until then the README lists the manual steps.
