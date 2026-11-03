@@ -63,6 +63,8 @@ pub struct State {
     pub device: Option<String>,
     /// Bundle id of the app last launched through the plugin; `logs` follows it.
     pub app: Option<String>,
+    /// Its pid, so `crashes` knows whether the captured stderr belongs to a crash.
+    pub pid: Option<u64>,
 }
 
 // ponytail: no lock; last writer wins, add a file lock if concurrent writers show up.
@@ -119,7 +121,7 @@ pub fn since(spec: &str, events: &[Value], now: f64) -> R<f64> {
         .rev()
         .find(|e| e["kind"] == "mark" && e["detail"] == spec)
         .and_then(|e| e["t"].as_f64())
-        .ok_or_else(|| format!("no mark named {spec:?}; set one with `herdr-ios-simulator mark {spec:?}`").into())
+        .ok_or_else(|| format!("no mark named {spec:?}; set one with `herdr-ios mark {spec:?}`").into())
 }
 
 /// Local wall-clock `HH:MM:SS` for a unix time.

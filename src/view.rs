@@ -1,6 +1,8 @@
 //! The simulator in a terminal pane: AXe video frames drawn by `render`, a header with
 //! buttons, clicks and drags sent as taps and swipes, and typing sent as keyboard input.
 
+use crate::agent::{self, SendKind};
+use crate::icons::{self, Icon, Rgb};
 use crate::render::{self, Cells, IMAGE_ID, Renderer, SYNC_OFF, SYNC_ON};
 use crate::sim::{self, Device};
 use crate::state::{self, Config};
@@ -14,6 +16,24 @@ use std::time::{Duration, Instant};
 
 /// The device image starts below the one-line header.
 const TOP: u16 = 1;
+/// Device points scrolled per wheel tick, and the pause that ends a scroll.
+const WHEEL_STEP: f64 = 40.0;
+const WHEEL_IDLE: Duration = Duration::from_millis(150);
+
+type Input = Box<dyn FnOnce(&str) -> R<()> + Send>;
+
+/// The thread that runs input for the device, in order; errors go to the header.
+fn input_thread(udid: String, tx: Sender<Msg>) -> Sender<Input> {
+    let (send, recv) = mpsc::channel::<Input>();
+    std::thread::spawn(move || {
+        for f in recv {
+            if let Err(e) = f(&udid) {
+                let _ = tx.send(Msg::Say(format!("error: {e}")));
+            }
+        }
+    });
+    send
+}
 
 /// Frames and stream ends carry the stream generation, so a replaced stream's last frames are dropped.
 enum Msg {
@@ -51,7 +71,7 @@ struct Term;
 impl Term {
     fn enter() -> R<Term> {
         terminal::enable_raw_mode()?;
-        execute!(stdout(), terminal::EnterAlternateScreen, cursor::Hide, event::EnableMouseCapture)?;
+        execute!(stdout(), terminal::EnterAlternateScreen, cursor::Hide, event::EnableMouseCapture, terminal::SetTitle("iOS Simulator"))?;
         Ok(Term)
     }
 }
@@ -60,6 +80,9 @@ impl Drop for Term {
     fn drop(&mut self) {
         let mut out = stdout();
         render::kitty_clear(&mut out);
+        for id in icon_ids() {
+            let _ = write!(out, "\x1b_Ga=d,d=I,i={id},q=2\x1b\\");
+        }
         let _ = execute!(out, event::DisableMouseCapture, cursor::Show, terminal::LeaveAlternateScreen);
         let _ = terminal::disable_raw_mode();
     }
@@ -69,11 +92,114 @@ impl Drop for Term {
 enum Act {
     Home,
     Lock,
-    Shot,
+    SendShot,
+    SendErrors,
     Quit,
 }
 
-const BUTTONS: [(&str, Act); 4] = [(" Home ", Act::Home), (" Lock ", Act::Lock), (" Screenshot ", Act::Shot), (" Quit ", Act::Quit)];
+impl Act {
+    /// Shown in the header while the button is hovered.
+    fn describe(self) -> &'static str {
+        match self {
+            Act::Home => "Home (Ctrl-O)",
+            Act::Lock => "Lock",
+            Act::SendShot => "Send screenshot to agent (Ctrl-X)",
+            Act::SendErrors => "Send the app's recent errors to agent",
+            Act::Quit => "Close view (Ctrl-Q)",
+        }
+    }
+}
+
+/// Header buttons, right-aligned; `None` is a gap between groups.
+const BUTTONS: [Option<(Icon, Act)>; 7] = [
+    Some((Icon::Home, Act::Home)),
+    Some((Icon::Lock, Act::Lock)),
+    None,
+    Some((Icon::Camera, Act::SendShot)),
+    Some((Icon::Alert, Act::SendErrors)),
+    None,
+    Some((Icon::Close, Act::Quit)),
+];
+const BUTTON_COLS: u16 = 4;
+
+/// herdr desktop's default dark look (from herdr-web-browser).
+// ponytail: fixed palette; sync herdr's theme like the browser's theme mod if light mode matters.
+const BAR: Rgb = (33, 37, 43);
+const HOVER: Rgb = (53, 57, 62);
+const FG: Rgb = (238, 238, 239);
+const MUTED: Rgb = (156, 158, 161);
+const DIM: Rgb = (111, 113, 117);
+const OK: Rgb = (97, 175, 239);
+const ERR: Rgb = (224, 108, 117);
+
+const ICON_BASE: u32 = 6000;
+const PILL_BASE: u32 = 6100;
+
+fn icon_ids() -> impl Iterator<Item = u32> {
+    (0..icons::ALL.len() as u32).flat_map(|i| [ICON_BASE + i, PILL_BASE + i])
+}
+
+/// An icon image in the header: (col, image id, width in cols).
+type Slot = (u16, u32, u16);
+
+/// A clickable header span.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Hit {
+    x0: u16,
+    x1: u16,
+    act: Act,
+}
+
+fn paint(out: &mut Vec<u8>, s: &str, fg: Rgb, bg: Rgb) {
+    let _ = write!(out, "\x1b[38;2;{};{};{}m\x1b[48;2;{};{};{}m{s}", fg.0, fg.1, fg.2, bg.0, bg.1, bg.2);
+}
+
+fn clip(s: &str, n: usize) -> String {
+    if s.chars().count() <= n {
+        return s.to_string();
+    }
+    let mut t: String = s.chars().take(n.saturating_sub(1)).collect();
+    t.push('…');
+    t
+}
+
+/// The header row for a `cols`-wide pane: device, status text, then the buttons on the right.
+/// Returns the bytes, the button spans and the icon slots (col, image id, width in cols).
+fn header_line(cols: u16, title: (&str, &str), status: (&str, Rgb), hover: Option<u16>, images: bool) -> (Vec<u8>, Vec<Hit>, Vec<Slot>) {
+    let mut out = Vec::new();
+    let _ = queue!(out, cursor::MoveTo(0, 0));
+    let buttons_w = BUTTONS.iter().map(|b| if b.is_some() { BUTTON_COLS } else { 1 }).sum::<u16>() + 1;
+    let left = format!(" {} ", title.0);
+    let os = format!("· {}  ", title.1);
+    let room = (cols.saturating_sub(buttons_w) as usize).saturating_sub(left.chars().count() + os.chars().count());
+    let text = clip(status.0, room);
+    paint(&mut out, &left, FG, BAR);
+    paint(&mut out, &os, DIM, BAR);
+    paint(&mut out, &format!("{text}{}", " ".repeat(room - text.chars().count())), status.1, BAR);
+    let mut col = cols.saturating_sub(buttons_w);
+    let (mut hits, mut slots) = (Vec::new(), Vec::new());
+    for b in BUTTONS {
+        let Some((icon, act)) = b else {
+            paint(&mut out, " ", FG, BAR);
+            col += 1;
+            continue;
+        };
+        let hot = hover.is_some_and(|c| (col..col + BUTTON_COLS).contains(&c));
+        let i = icons::ALL.iter().position(|x| *x == icon).unwrap_or(0) as u32;
+        if images {
+            slots.push(if hot { (col, PILL_BASE + i, BUTTON_COLS) } else { (col + 1, ICON_BASE + i, 2) });
+            paint(&mut out, "    ", FG, BAR);
+        } else {
+            let (fg, bg) = if hot { (FG, HOVER) } else { (MUTED, BAR) };
+            paint(&mut out, &format!(" {}  ", icon.glyph()), fg, bg);
+        }
+        hits.push(Hit { x0: col, x1: col + BUTTON_COLS, act });
+        col += BUTTON_COLS;
+    }
+    paint(&mut out, " ", FG, BAR);
+    out.extend_from_slice(b"\x1b[0m");
+    (out, hits, slots)
+}
 
 /// Where the device image sits in the pane, in cells.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -111,8 +237,16 @@ struct View {
     flip: bool,
     message: String,
     message_at: Instant,
-    press: Option<(u16, u16)>,
+    press: Option<(u16, u16, Instant)>,
+    /// Wheel scrolling not yet sent: start point, distance and when it last moved.
+    wheel: Option<(f64, f64, f64, Instant)>,
+    inputs: Sender<Input>,
     typed: String,
+    /// Header column under the mouse.
+    hover: Option<u16>,
+    hits: Vec<Hit>,
+    /// Header bytes as last written; redraw only on change.
+    drawn: Vec<u8>,
 }
 
 impl View {
@@ -134,54 +268,49 @@ impl View {
         Ok(())
     }
 
-    /// Run `f` off the UI thread; failures show in the header.
+    /// Queue `f` for the input thread, which runs one at a time in order: each axe call takes
+    /// ~1s to start, and overlapping touches cancel each other. Failures show in the header.
     fn input(&self, f: impl FnOnce(&str) -> R<()> + Send + 'static) {
-        let (udid, tx) = (self.dev.udid.clone(), self.tx.clone());
-        std::thread::spawn(move || {
-            if let Err(e) = f(&udid) {
-                let _ = tx.send(Msg::Say(format!("error: {e}")));
-            }
-        });
+        let _ = self.inputs.send(Box::new(f));
     }
 
-    fn header(&self) -> R<Vec<u8>> {
-        let (cols, _) = terminal::size()?;
-        let mut s = format!(" {} · {} ", self.dev.name, self.dev.os);
-        for (label, _) in BUTTONS {
-            s += &format!("\x1b[7m{label}\x1b[0m ");
+    /// Send the scrolling gathered since the wheel last moved as one drag.
+    fn flush_wheel(&mut self) {
+        let Some((x, y, dy, _)) = self.wheel.take() else { return };
+        let Some(screen) = self.screen else { return };
+        let to = (x, (y + dy).clamp(1.0, screen.1 - 1.0));
+        self.input(move |u| axe::drag(u, (x, y), to, 0.5));
+    }
+
+    /// The header's status text: a hovered button's name, else a recent message.
+    fn status(&self) -> (String, Rgb) {
+        if let Some(h) = self.hover.and_then(|c| self.hits.iter().find(|h| (h.x0..h.x1).contains(&c))) {
+            return (h.act.describe().into(), FG);
         }
         if self.message_at.elapsed() < Duration::from_secs(6) {
-            s += &format!(" {}", self.message);
+            return (self.message.clone(), if self.message.starts_with("error") { ERR } else { OK });
         }
-        let mut out = Vec::new();
-        queue!(out, cursor::MoveTo(0, 0), terminal::Clear(terminal::ClearType::CurrentLine))?;
-        // Clip by visible width; escapes don't take columns.
-        let (mut visible, mut esc) = (0usize, false);
-        for ch in s.chars() {
-            esc = esc || ch == '\x1b';
-            if !esc {
-                if visible >= cols as usize {
-                    break;
-                }
-                visible += 1;
-            }
-            esc = esc && !ch.is_ascii_alphabetic();
-            out.extend_from_slice(ch.encode_utf8(&mut [0; 4]).as_bytes());
-        }
-        out.extend_from_slice(b"\x1b[0m");
-        Ok(out)
+        (String::new(), DIM)
     }
 
-    fn button_at(&self, col: u16) -> Option<Act> {
-        let mut x = format!(" {} · {} ", self.dev.name, self.dev.os).chars().count();
-        for (label, act) in BUTTONS {
-            let w = label.chars().count();
-            if (x..x + w).contains(&(col as usize)) {
-                return Some(act);
-            }
-            x += w + 1;
+    /// Upload the icons (plain and hovered pill) as Kitty images; again after a resize.
+    fn upload_icons(&mut self) -> R<()> {
+        if self.renderer != Renderer::Kitty {
+            return Ok(());
         }
-        None
+        use base64::Engine;
+        let b64 = |png: Vec<u8>| base64::engine::general_purpose::STANDARD.encode(png);
+        let (cw, h) = ((self.cells.w * 2.0).round() as u32, (self.cells.h * 2.0).round() as u32);
+        let mut out = Vec::new();
+        for (i, icon) in icons::ALL.iter().enumerate() {
+            render::kitty_upload(&mut out, &b64(icon.png(MUTED, cw * 2, h, 0.62)?), ICON_BASE + i as u32)?;
+            render::kitty_upload(&mut out, &b64(icons::pill_png(*icon, FG, HOVER, cw * BUTTON_COLS as u32, h)?), PILL_BASE + i as u32)?;
+        }
+        let mut so = stdout().lock();
+        so.write_all(&out)?;
+        so.flush()?;
+        self.drawn.clear();
+        Ok(())
     }
 
     /// Kill the stream; its reader sees EOF and exits, and the new generation ignores it.
@@ -193,11 +322,31 @@ impl View {
         self.generation += 1;
     }
 
-    fn draw_header(&self) -> R<()> {
-        let out = self.header()?;
-        let mut so = stdout().lock();
-        so.write_all(&out)?;
-        so.flush()?;
+    fn draw_header(&mut self) -> R<()> {
+        let (cols, _) = terminal::size()?;
+        let (text, color) = self.status();
+        let title = (self.dev.name.as_str(), self.dev.os.as_str());
+        let (line, hits, slots) = header_line(cols, title, (&text, color), self.hover, self.renderer == Renderer::Kitty);
+        self.hits = hits;
+        let mut out = Vec::from(SYNC_ON.as_bytes());
+        out.extend_from_slice(&line);
+        if !slots.is_empty() {
+            // Re-place every icon: drop old placements (keeping the images), put new ones.
+            for id in icon_ids() {
+                write!(out, "\x1b_Ga=d,d=i,i={id},q=2\x1b\\")?;
+            }
+            for (col, id, w) in slots {
+                queue!(out, cursor::MoveTo(col, 0))?;
+                write!(out, "\x1b_Ga=p,i={id},p=1,c={},r=1,C=1,q=2\x1b\\", self.cells.img_cols(w))?;
+            }
+        }
+        out.extend_from_slice(SYNC_OFF.as_bytes());
+        if out != self.drawn {
+            let mut so = stdout().lock();
+            so.write_all(&out)?;
+            so.flush()?;
+            self.drawn = out;
+        }
         Ok(())
     }
 
@@ -245,17 +394,24 @@ impl View {
         match act {
             Act::Home => self.input(|u| axe::button(u, axe::Button::Home)),
             Act::Lock => self.input(|u| axe::button(u, axe::Button::Lock)),
-            Act::Shot => {
-                let dir = state::state_dir().join("screenshots");
-                let path = dir.join(format!("{}.png", state::now() as u64));
-                match std::fs::create_dir_all(&dir).map_err(Into::into).and_then(|_| sim::screenshot(&self.dev, &path)) {
-                    Ok(()) => self.say(format!("saved {}", path.display())),
-                    Err(e) => self.say(format!("error: {e}")),
-                }
-            }
+            Act::SendShot => self.send(SendKind::Screenshot),
+            Act::SendErrors => self.send(SendKind::Errors),
             Act::Quit => return false,
         }
         true
+    }
+
+    /// Send to the agent off the UI thread; the result shows in the header.
+    fn send(&mut self, kind: SendKind) {
+        self.say("sending…");
+        let (dev, tx) = (self.dev.clone(), self.tx.clone());
+        std::thread::spawn(move || {
+            let msg = match agent::send(&dev, kind, None) {
+                Ok(to) => format!("sent to {to}"),
+                Err(e) => format!("error: {e}"),
+            };
+            let _ = tx.send(Msg::Say(msg));
+        });
     }
 
     fn flush_typing(&mut self) {
@@ -270,7 +426,7 @@ impl View {
         match k.code {
             KeyCode::Char('q') if ctrl => return false,
             KeyCode::Char('o') if ctrl => return self.act(Act::Home),
-            KeyCode::Char('x') if ctrl => return self.act(Act::Shot),
+            KeyCode::Char('x') if ctrl => return self.act(Act::SendShot),
             KeyCode::Char(c) if !ctrl => self.typed.push(c),
             KeyCode::Enter | KeyCode::Backspace | KeyCode::Tab => {
                 self.flush_typing();
@@ -287,17 +443,20 @@ impl View {
     }
 
     fn on_mouse(&mut self, m: event::MouseEvent) -> bool {
+        if matches!(m.kind, MouseEventKind::Moved | MouseEventKind::Drag(_)) {
+            self.hover = (m.row < TOP).then_some(m.column);
+        }
         let (Some(placed), Some(screen)) = (self.placed, self.screen) else { return true };
         let at = placed.points_at(m.column, m.row, screen);
         match m.kind {
             MouseEventKind::Down(MouseButton::Left) if m.row < TOP => {
-                if let Some(a) = self.button_at(m.column) {
-                    return self.act(a);
+                if let Some(h) = self.hits.iter().find(|h| (h.x0..h.x1).contains(&m.column)) {
+                    return self.act(h.act);
                 }
             }
-            MouseEventKind::Down(MouseButton::Left) => self.press = at.is_some().then_some((m.column, m.row)),
+            MouseEventKind::Down(MouseButton::Left) => self.press = at.is_some().then_some((m.column, m.row, Instant::now())),
             MouseEventKind::Up(MouseButton::Left) => {
-                let Some((c0, r0)) = self.press.take() else { return true };
+                let Some((c0, r0, t0)) = self.press.take() else { return true };
                 let Some(from) = placed.points_at(c0, r0, screen) else { return true };
                 let to = placed
                     .points_at(m.column.clamp(placed.left, placed.left + placed.cols - 1), m.row.clamp(TOP, TOP + placed.rows - 1), screen)
@@ -308,14 +467,17 @@ impl View {
                     self.input(move |u| axe::tap(u, from.0, from.1));
                 } else {
                     let _ = state::event(&udid, "user swipe", &format!("{:.0},{:.0} -> {:.0},{:.0}", from.0, from.1, to.0, to.1));
-                    self.input(move |u| axe::swipe(u, from, to, 0.3));
+                    // Replay at the speed it was dragged: slow drags scroll by their length, flicks fling.
+                    let secs = t0.elapsed().as_secs_f64().clamp(0.1, 2.0);
+                    self.input(move |u| axe::drag(u, from, to, secs));
                 }
             }
             MouseEventKind::ScrollDown | MouseEventKind::ScrollUp => {
                 if let Some((x, y)) = at {
-                    let dy = if m.kind == MouseEventKind::ScrollDown { -120.0 } else { 120.0 };
-                    let to = (x, (y + dy).clamp(1.0, screen.1 - 1.0));
-                    self.input(move |u| axe::swipe(u, (x, y), to, 0.15));
+                    let step = if m.kind == MouseEventKind::ScrollDown { -WHEEL_STEP } else { WHEEL_STEP };
+                    let (x, y, dy, _) = self.wheel.unwrap_or((x, y, 0.0, Instant::now()));
+                    let cap = screen.1 * 0.6;
+                    self.wheel = Some((x, y, (dy + step).clamp(-cap, cap), Instant::now()));
                 }
             }
             _ => {}
@@ -332,6 +494,7 @@ pub fn run(cfg: Config, device: Option<&str>) -> R<()> {
     let dev = sim::boot(&cfg, device)?;
     let (cells, renderer) = render::detect(&cfg);
     let (tx, rx) = mpsc::channel();
+    let (udid, tx2) = (dev.udid.clone(), tx.clone());
     let mut v = View {
         cfg,
         dev,
@@ -344,11 +507,17 @@ pub fn run(cfg: Config, device: Option<&str>) -> R<()> {
         screen: None,
         placed: None,
         flip: false,
-        message: "click to tap, drag to swipe, type to type · Ctrl-O home, Ctrl-X screenshot, Ctrl-Q close".into(),
-        message_at: Instant::now(),
+        message: String::new(),
+        message_at: Instant::now() - Duration::from_secs(60),
         press: None,
+        wheel: None,
+        inputs: input_thread(udid, tx2),
         typed: String::new(),
+        hover: None,
+        hits: Vec::new(),
+        drawn: Vec::new(),
     };
+    v.upload_icons()?;
     let result = event_loop(&mut v, &rx);
     v.stop_stream();
     result
@@ -392,6 +561,9 @@ fn event_loop(v: &mut View, rx: &Receiver<Msg>) -> R<()> {
         }
         if !event::poll(Duration::from_millis(30))? {
             v.flush_typing();
+            if v.wheel.is_some_and(|w| w.3.elapsed() > WHEEL_IDLE) {
+                v.flush_wheel();
+            }
             continue;
         }
         loop {
@@ -400,6 +572,7 @@ fn event_loop(v: &mut View, rx: &Receiver<Msg>) -> R<()> {
                 Event::Mouse(m) => v.on_mouse(m),
                 Event::Resize(..) => {
                     v.placed = None;
+                    v.upload_icons()?;
                     last_tick = Instant::now() - Duration::from_secs(10);
                     true
                 }
@@ -434,6 +607,17 @@ mod tests {
         assert_eq!(p.points_at(9, TOP, (400.0, 800.0)), None);
         assert_eq!(p.points_at(50, TOP, (400.0, 800.0)), None);
         assert_eq!(p.points_at(20, 0, (400.0, 800.0)), None);
+    }
+
+    #[test]
+    fn header_buttons_sit_right_and_hover_shows_a_pill() {
+        let (_, hits, slots) = header_line(80, ("iPhone 18 Pro", "iOS 27.2"), ("", DIM), Some(77), true);
+        let acts: Vec<Act> = hits.iter().map(|h| h.act).collect();
+        assert_eq!(acts, [Act::Home, Act::Lock, Act::SendShot, Act::SendErrors, Act::Quit]);
+        assert_eq!(hits.last().map(|h| (h.x0, h.x1)), Some((79 - BUTTON_COLS, 79)));
+        // Hovering the close button places its pill over all 4 cells; the others are bare icons.
+        assert_eq!(slots.last(), Some(&(79 - BUTTON_COLS, PILL_BASE + 4, BUTTON_COLS)));
+        assert_eq!(slots[0], (hits[0].x0 + 1, ICON_BASE, 2));
     }
 
     #[test]
