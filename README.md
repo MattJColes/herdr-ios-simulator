@@ -2,15 +2,19 @@
 
 An iOS Simulator inside [herdr](https://herdr.dev). The simulator opens in a pane next to your coding agent, so you and your agent use the same device, and the agent can read every log, crash and event the app produces.
 
-> **Status: early, not yet released.** The CLI works against real simulators; the view has not been tested inside herdr yet. The screenshot below is a mockup. See [docs/FEATURES.md](docs/FEATURES.md) for what's planned.
+> **Status: early, not yet released.** Tested end to end in herdr desktop 0.9.5 with Xcode 27 (iOS 27.2): the view, its buttons, and every CLI command below. The image below is a mockup. See [docs/FEATURES.md](docs/FEATURES.md) for what's planned.
 
 ![Mockup: an agent in herdr fixing a Sign in bug, with the iOS Simulator and its log in the pane beside it](docs/screenshots/mockup.svg)
+
+| Agent runs `herdr-ios launch com.apple.Preferences` | then `herdr-ios ui` and `herdr-ios tap 10` |
+|---|---|
+| <img src="docs/screenshots/settings.png" width="240" alt="Settings open on the simulator"> | <img src="docs/screenshots/general.png" width="240" alt="Settings > General, opened by the agent tapping element 10"> |
 
 ## What it does
 
 ### A view beside your agent
 
-Run **Simulator: open** from herdr, or let the agent run `herdr-ios boot --show`. The device boots without Simulator.app and appears in a view: a herdr pane beside your agent. Click to tap, drag to swipe, type to type. The header has Home, Lock, Screenshot and Quit buttons.
+Run **Simulator: open** from herdr, or let the agent run `herdr-ios boot --show`. The device boots without Simulator.app and appears in a view: a herdr pane beside your agent. Click to tap, drag to swipe, type to type. The header has icon buttons, in herdr desktop's style, for Home, Lock, send a screenshot to the agent, send the app's recent errors to the agent, and close.
 
 ### Agents build, run and drive the app
 
@@ -81,6 +85,7 @@ herdr-ios mark before-login
 herdr-ios logs --errors --since before-login
 herdr-ios crashes
 herdr-ios screenshot /tmp/screen.png
+herdr-ios send screenshot                 # put it in an agent's prompt (default: the agent beside you)
 ```
 
 `herdr-ios agent-help` prints the full list. Add `--json` to any command for structured output, and `--device NAME` to pick a simulator when several are booted.
@@ -93,9 +98,12 @@ herdr-ios screenshot /tmp/screen.png
 | Drag | Swipe |
 | Scroll wheel | Scroll |
 | Typing, Return, Backspace, Tab | Sent to the focused field |
+| Header buttons | Home, Lock, send screenshot to agent, send errors to agent, close (hover for names) |
 | Ctrl-O | Home |
-| Ctrl-X | Screenshot (saved under the plugin's state folder) |
+| Ctrl-X | Send a screenshot to the agent |
 | Ctrl-Q | Close the view (the simulator keeps running) |
+
+Sends go to the agent in the same herdr space as the view. Pass `--agent NAME` to `herdr-ios send` to pick another. herdr's command palette also has **Simulator: send screenshot to agent** and **Simulator: send errors to agent**.
 
 ## Settings
 

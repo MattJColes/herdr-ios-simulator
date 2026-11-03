@@ -34,6 +34,18 @@ description = "Shut the current simulator down."
 command = ["./target/release/herdr-ios", "shutdown"]
 
 [[actions]]
+id = "send-screenshot"
+title = "Simulator: send screenshot to agent"
+description = "Screenshot the simulator and send its file path to an agent."
+command = ["./target/release/herdr-ios", "send", "screenshot"]
+
+[[actions]]
+id = "send-errors"
+title = "Simulator: send errors to agent"
+description = "Send the app's errors and crashes from the last 5 minutes to an agent."
+command = ["./target/release/herdr-ios", "send", "errors"]
+
+[[actions]]
 id = "install-cli"
 title = "Simulator: install CLI"
 description = "Symlink herdr-ios into ~/.local/bin so agents can call it."

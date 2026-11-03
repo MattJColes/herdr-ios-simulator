@@ -27,8 +27,10 @@ fn run(args: &[&str], udid: &str) -> R<String> {
     Ok(String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
+// AXe's default tap and an un-held button send down and up together, which the simulator
+// drops on Xcode 27 (axe reports success, nothing happens); a real touch and a 0.1s hold land.
 pub fn tap(udid: &str, x: f64, y: f64) -> R<()> {
-    run(&["tap", "-x", &format!("{x:.1}"), "-y", &format!("{y:.1}")], udid).map(drop)
+    run(&["tap", "-x", &format!("{x:.1}"), "-y", &format!("{y:.1}"), "--tap-style", "physical"], udid).map(drop)
 }
 
 pub fn swipe(udid: &str, from: (f64, f64), to: (f64, f64), secs: f64) -> R<()> {
@@ -66,7 +68,7 @@ pub fn button(udid: &str, b: Button) -> R<()> {
         Button::Side => "side-button",
         Button::Siri => "siri",
     };
-    run(&["button", name], udid).map(drop)
+    run(&["button", name, "--duration", "0.1"], udid).map(drop)
 }
 
 /// Start `axe stream-video --format raw`: each frame is a 4-byte big-endian length then JPEG bytes.
@@ -95,12 +97,13 @@ impl Element {
     }
 
     pub fn line(&self, n: usize) -> String {
+        let q = |s: &str| format!("\"{}\"", s.replace('"', "\\\""));
         let mut s = format!("[{n}] {}", self.kind);
         if !self.label.is_empty() {
-            s += &format!(" {:?}", self.label);
+            s += &format!(" {}", q(&self.label));
         }
         if !self.value.is_empty() && self.value != self.label {
-            s += &format!(" value={:?}", self.value);
+            s += &format!(" value={}", q(&self.value));
         }
         if !self.id.is_empty() {
             s += &format!(" id={}", self.id);
@@ -109,8 +112,26 @@ impl Element {
     }
 }
 
+/// A label with invisible formatting marks dropped and odd spaces made plain, so `ui` prints
+/// `"9:55 pm"` rather than `"9:55\u{202f}pm"`.
 fn text(v: &Value, k: &str) -> String {
-    v[k].as_str().unwrap_or("").trim().to_string()
+    let s = v[k].as_str().unwrap_or("");
+    s.chars()
+        .filter(|c| !matches!(c, '\u{200b}'..='\u{200f}' | '\u{2060}' | '\u{feff}'))
+        .map(|c| if c.is_whitespace() { ' ' } else { c })
+        .collect::<String>()
+        .trim()
+        .to_string()
+}
+
+/// Worth listing: has a label or value, or is a control with an id. Unlabelled containers
+/// (Safari's `Group id=TabDocument?...`) and scroll bars are noise an agent can't act on.
+fn worth_naming(kind: &str, label: &str, value: &str, id: &str) -> bool {
+    let container = matches!(kind, "Application" | "Group" | "GenericElement" | "Other" | "ScrollView");
+    if kind == "Slider" && label.contains("scroll bar") {
+        return false;
+    }
+    !label.is_empty() || (!container && !(value.is_empty() && id.is_empty()))
 }
 
 fn frame(v: &Value) -> Option<[f64; 4]> {
@@ -127,7 +148,7 @@ pub fn parse_tree(v: &Value) -> (Vec<Element>, Option<(f64, f64)>) {
             let kind = text(node, "type");
             let (label, value, id) = (text(node, "AXLabel"), text(node, "AXValue"), text(node, "AXUniqueId"));
             if kind != "Application"
-                && !(label.is_empty() && value.is_empty() && id.is_empty())
+                && worth_naming(&kind, &label, &value, &id)
                 && let Some(frame) = frame(node).filter(|f| f[2] > 0.0 && f[3] > 0.0)
             {
                 out.push(Element { kind: if kind.is_empty() { "Element".into() } else { kind }, label, value, id, frame });
@@ -196,6 +217,17 @@ mod tests {
     #[test]
     fn screen_size_comes_from_the_root() {
         assert_eq!(parse_tree(&tree()).1, Some((402.0, 874.0)));
+    }
+
+    #[test]
+    fn unlabelled_containers_and_scroll_bars_are_left_out() {
+        let t = json!([{ "type": "Application", "frame": { "x": 0, "y": 0, "width": 402, "height": 874 }, "children": [
+            { "type": "Group", "AXUniqueId": "TabDocument?UUID=1", "frame": { "x": 0, "y": 0, "width": 402, "height": 800 } },
+            { "type": "Slider", "AXLabel": "Vertical scroll bar, 2 pages", "AXValue": "0%", "frame": { "x": 390, "y": 0, "width": 10, "height": 800 } },
+            { "type": "TextField", "AXValue": "Name", "AXUniqueId": "name", "frame": { "x": 10, "y": 100, "width": 300, "height": 40 } },
+            { "type": "StaticText", "AXLabel": "9:55\u{202f}pm\u{200e}", "frame": { "x": 10, "y": 10, "width": 60, "height": 20 } } ] }]);
+        let lines: Vec<String> = parse_tree(&t).0.iter().enumerate().map(|(i, e)| e.line(i + 1)).collect();
+        assert_eq!(lines, ["[1] TextField value=\"Name\" id=name", "[2] StaticText \"9:55 pm\""]);
     }
 
     #[test]

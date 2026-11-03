@@ -81,7 +81,7 @@ anything.
 
 ### 4. Send to the agent
 
-**Next, after the View is tested by hand.**
+**Screenshot and errors done** (`send`, the header's buttons, herdr actions); `pick` is next.
 
 - Screenshot and recent errors to the agent, through `herdr agent prompt`, using the browser's
   "which agent gets it" order.

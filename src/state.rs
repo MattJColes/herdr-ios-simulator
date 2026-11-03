@@ -63,6 +63,8 @@ pub struct State {
     pub device: Option<String>,
     /// Bundle id of the app last launched through the plugin; `logs` follows it.
     pub app: Option<String>,
+    /// Its pid, so `crashes` knows whether the captured stderr belongs to a crash.
+    pub pid: Option<u64>,
 }
 
 // ponytail: no lock; last writer wins, add a file lock if concurrent writers show up.

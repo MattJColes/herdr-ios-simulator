@@ -148,6 +148,14 @@ pub fn fit(w: f64, h: f64, cols: u16, rows: u16, k: f64) -> (u16, u16) {
 /// at the cursor, then delete the previous image `old`. Replacing one id in place blanks
 /// the picture while the new one uploads and decodes, which flickers on every frame.
 pub fn kitty_swap(out: &mut Vec<u8>, b64: &str, id: u32, old: u32, cols: u16, rows: u16) -> R<()> {
+    kitty_upload(out, b64, id)?;
+    write!(out, "\x1b_Ga=p,i={id},p=1,q=2,C=1,c={cols},r={rows}\x1b\\")?;
+    write!(out, "\x1b_Ga=d,d=I,i={old},q=2\x1b\\")?;
+    Ok(())
+}
+
+/// Upload a base64 PNG as image `id` without placing it.
+pub fn kitty_upload(out: &mut Vec<u8>, b64: &str, id: u32) -> R<()> {
     let chunks: Vec<&str> = b64.as_bytes().chunks(4096).map(|c| std::str::from_utf8(c).unwrap_or("")).collect();
     for (i, chunk) in chunks.iter().enumerate() {
         let more = u8::from(i + 1 < chunks.len());
@@ -157,8 +165,6 @@ pub fn kitty_swap(out: &mut Vec<u8>, b64: &str, id: u32, old: u32, cols: u16, ro
             write!(out, "\x1b_Gm={more};{chunk}\x1b\\")?;
         }
     }
-    write!(out, "\x1b_Ga=p,i={id},p=1,q=2,C=1,c={cols},r={rows}\x1b\\")?;
-    write!(out, "\x1b_Ga=d,d=I,i={old},q=2\x1b\\")?;
     Ok(())
 }
 

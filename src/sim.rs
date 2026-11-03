@@ -130,13 +130,34 @@ fn output_paths(udid: &str) -> (PathBuf, PathBuf) {
 pub fn launch(d: &Device, bundle: &str) -> R<String> {
     let (out, err) = output_paths(&d.udid);
     std::fs::create_dir_all(state::device_dir(&d.udid))?;
+    // simctl appends to these, so clear them to keep only this launch's output.
+    for p in [&out, &err] {
+        let _ = std::fs::remove_file(p);
+    }
     let (o, e) = (format!("--stdout={}", out.display()), format!("--stderr={}", err.display()));
     let r = simctl(&["launch", "--terminate-running-process", &o, &e, &d.udid, bundle])?;
     // "com.example.MyApp: 12345"
     let pid = r.trim().rsplit(':').next().unwrap_or("").trim().to_string();
-    state::update(|s| s.app = Some(bundle.into()))?;
+    state::update(|s| {
+        s.app = Some(bundle.into());
+        s.pid = pid.parse().ok();
+    })?;
     state::event(&d.udid, "launch", &format!("{bundle} pid {pid}"))?;
+    wait_frontmost(&d.udid, &pid);
     Ok(pid)
+}
+
+/// Wait (up to 10s) until the app owns the screen, so a `ui` straight after `launch` describes
+/// the app rather than the home screen it is animating out of. Returns early on any axe error.
+fn wait_frontmost(udid: &str, pid: &str) {
+    let Ok(pid) = pid.parse::<u64>() else { return };
+    for _ in 0..40 {
+        match crate::axe::describe_raw(udid) {
+            Ok(t) if t[0]["pid"].as_u64() == Some(pid) => return,
+            Ok(_) => std::thread::sleep(std::time::Duration::from_millis(250)),
+            Err(_) => return,
+        }
+    }
 }
 
 pub fn terminate(d: &Device, bundle: &str) -> R<()> {
@@ -153,15 +174,15 @@ pub fn screenshot(d: &Device, path: &Path) -> R<()> {
     simctl(&["io", &d.udid, "screenshot", "--type=png", &path.to_string_lossy()]).map(drop)
 }
 
-/// The app's executable name, which is the process name in the unified log.
-fn executable(d: &Device, bundle: &str) -> R<String> {
-    let app = simctl(&["get_app_container", &d.udid, bundle, "app"])?;
-    let plist = Path::new(app.trim()).join("Info.plist");
+/// The installed .app's path and its executable name (the process name in the unified log).
+fn executable(d: &Device, bundle: &str) -> R<(String, String)> {
+    let app = simctl(&["get_app_container", &d.udid, bundle, "app"])?.trim().to_string();
+    let plist = Path::new(&app).join("Info.plist");
     let out = Command::new("plutil").args(["-extract", "CFBundleExecutable", "raw", "-o", "-"]).arg(&plist).output()?;
     if !out.status.success() {
         return Err(format!("cannot read {}", plist.display()).into());
     }
-    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+    Ok((app, String::from_utf8_lossy(&out.stdout).trim().to_string()))
 }
 
 pub struct LogQuery<'a> {
@@ -169,6 +190,8 @@ pub struct LogQuery<'a> {
     pub since: f64,
     pub errors: bool,
     pub info: bool,
+    /// Keep Apple frameworks' messages from inside the app (UIKit, CoreData, networking...).
+    pub system: bool,
 }
 
 /// Unified log entries from the device (ndjson objects), oldest first.
@@ -180,7 +203,13 @@ pub fn logs(d: &Device, q: &LogQuery) -> R<Vec<Value>> {
     }
     let mut preds = Vec::new();
     if let Some(b) = q.bundle {
-        preds.push(format!("process == \"{}\"", executable(d, b)?.replace('"', "")));
+        let (app, exe) = executable(d, b)?;
+        preds.push(format!("process == \"{}\"", exe.replace('"', "")));
+        if !q.system {
+            // Frameworks log hundreds of lines (keyboard, haptics) for every one the app writes, many
+            // with no subsystem, so keep what the app's own binary and embedded frameworks logged.
+            preds.push(format!("senderImagePath BEGINSWITH \"{}/\"", app.replace('"', "")));
+        }
     }
     if q.errors {
         preds.push("messageType >= error".into());
@@ -250,12 +279,30 @@ pub fn parse_crash(text: &str) -> Option<Value> {
         .and_then(|v| v.as_str().map(String::from));
     Some(json!({
         "app": h["app_name"],
+        "path": b["procPath"],
+        "pid": b["pid"],
         "bundle": h["bundleID"],
         "time": h["timestamp"],
         "exception": format!("{} ({})", ex["type"].as_str().unwrap_or("?"), ex["signal"].as_str().unwrap_or("?")),
         "reason": reason,
         "frames": frames,
     }))
+}
+
+/// Installed apps live under .../CoreSimulator/Devices/<UDID>/data/Containers/Bundle/Application/;
+/// the simulator's own daemons (which crash now and then) don't.
+fn is_app_on(crash: &Value, udid: &str) -> bool {
+    crash["path"].as_str().is_some_and(|p| p.contains(&format!("/Devices/{udid}/data/Containers/Bundle/Application/")))
+}
+
+/// Swift's `fatalError`/`precondition` message, which the crash report leaves out but the
+/// runtime prints to stderr, when the captured stderr is from the crashed process.
+fn stderr_reason(udid: &str, pid: Option<u64>) -> Option<String> {
+    if pid.is_none() || pid != state::load().pid {
+        return None;
+    }
+    let s = std::fs::read_to_string(output_paths(udid).1).ok()?;
+    s.lines().rev().find(|l| l.contains("Fatal error:")).map(|l| l.trim().to_string())
 }
 
 /// Crash reports written by apps on this device, newest first.
@@ -269,12 +316,11 @@ pub fn crashes(udid: &str, since: f64) -> R<Vec<Value>> {
         if p.extension().is_none_or(|e| e != "ips") {
             continue;
         }
-        // Simulator app paths contain .../CoreSimulator/Devices/<UDID>/...
         let Ok(text) = std::fs::read_to_string(&p) else { continue };
-        if !text.contains(udid) {
-            continue;
-        }
-        if let Some(mut c) = parse_crash(&text) {
+        if let Some(mut c) = parse_crash(&text).filter(|c| is_app_on(c, udid)) {
+            if c["reason"].is_null() {
+                c["reason"] = json!(stderr_reason(udid, c["pid"].as_u64()));
+            }
             c["file"] = json!(p.display().to_string());
             found.push((m, c));
         }
