@@ -224,10 +224,19 @@ fn desktop_home() -> R<std::path::PathBuf> {
 
 const ICON: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><rect x="4" y="1.5" width="8" height="13" rx="2"/><path d="M7 3.6h2"/></svg>"#;
 
-/// Put "iOS Simulator" in herdr desktop's + menu, and give the View its name and icon there,
-/// merged into programs.json without touching the user's other entries.
-pub fn install_desktop() -> R<String> {
-    let home = desktop_home()?;
+/// The menu mod (`mod.open:herdr-ios-simulator`), so a key in keys.json can open it.
+const MENU_JS: &str = include_str!("../desktop/herdr-ios-simulator/main.js");
+const MENU_JSON: &str = include_str!("../desktop/herdr-ios-simulator/mod.json");
+
+/// Put "iOS Simulator" in herdr desktop's + menu, give the View its name and icon there (merged
+/// into programs.json without touching the user's other entries), and install the menu mod.
+/// With `if_present`, do nothing when herdr desktop isn't installed (herdr runs it at startup).
+pub fn install_desktop(if_present: bool) -> R<String> {
+    let home = match desktop_home() {
+        Ok(h) => h,
+        Err(_) if if_present => return Ok("herdr desktop not found; skipped".into()),
+        Err(e) => return Err(e),
+    };
     std::fs::create_dir_all(home.join("icons"))?;
     std::fs::write(home.join("icons").join(format!("{}.svg", state::PLUGIN_ID)), ICON)?;
     let exe = std::fs::canonicalize(std::env::current_exe()?)?.display().to_string();
@@ -249,7 +258,17 @@ pub fn install_desktop() -> R<String> {
     if errors.contains("programs") {
         return Err(format!("herdr desktop rejected {}: {errors}", path.display()).into());
     }
-    Ok(format!("added iOS Simulator to herdr desktop's + menu ({})", path.display()))
+    let menu = home.join("mods").join(state::PLUGIN_ID);
+    std::fs::create_dir_all(&menu)?;
+    std::fs::write(menu.join("main.js"), MENU_JS.replace("\"__HERDR_IOS_BIN__\"", &serde_json::to_string(&exe)?))?;
+    std::fs::write(menu.join("mod.json"), MENU_JSON)?;
+    run("herdr-app", &["check", &menu.display().to_string()]).map_err(|e| format!("the menu mod failed its check: {e}"))?;
+    Ok(format!(
+        "added iOS Simulator to herdr desktop's + menu ({}) and its menu ({}); open the menu with `mod.open:{}` (e.g. bind it in keys.json)",
+        path.display(),
+        menu.display(),
+        state::PLUGIN_ID
+    ))
 }
 
 /// Open the View: a plugin pane in the TUI; in herdr desktop, a split right of the calling

@@ -15,6 +15,10 @@ command = ["cargo", "build", "--release"]
 [[startup]]
 command = ["./target/release/herdr-ios", "install-cli"]
 
+# If herdr desktop is installed, keep its + menu entry and menu pointing at this build.
+[[startup]]
+command = ["./target/release/herdr-ios", "install-desktop", "--if-present"]
+
 [[panes]]
 id = "simulator"
 title = "Simulator"

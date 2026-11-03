@@ -51,10 +51,16 @@ herdr shows the commands the plugin will run, builds it with `cargo build --rele
 herdr plugin action invoke herdr-ios-simulator.install-cli
 ```
 
-For herdr desktop, add **iOS Simulator** to its + menu (it opens as a split beside your agent):
+In herdr desktop, the plugin adds **iOS Simulator** to the + menu (it opens as a split beside your agent), plus its own menu: open the simulator, Home, send a screenshot or errors to the agent, set up agents, and shut down. herdr does this each time it starts, so the entries follow updates. To do it straight away:
 
 ```sh
 herdr-ios install-desktop
+```
+
+To open the iOS Simulator menu with a shortcut, add this to `~/.config/herdr-app/keys.json` under `"global"`:
+
+```json
+"cmd-shift-i": "mod.open:herdr-ios-simulator"
 ```
 
 To have Claude Code, Codex, OpenCode and Pi reach for `herdr-ios` whenever you ask to run or debug an iOS app, in every project:
@@ -95,6 +101,7 @@ rm -rf ~/.local/state/herdr/plugins/herdr-ios-simulator
 rm -rf ~/.config/herdr/plugins/config/herdr-ios-simulator
 rm -rf ~/.claude/skills/herdr-ios-simulator   # and the herdr-ios-simulator section in ~/.codex, ~/.config/opencode and ~/.pi/agent AGENTS.md
 rm ~/.config/herdr-app/icons/herdr-ios-simulator.svg   # and the herdr-ios-simulator entry in ~/.config/herdr-app/programs.json
+rm -rf ~/.config/herdr-app/mods/herdr-ios-simulator
 ```
 
 Your simulators and their apps are untouched. AXe stays installed until you run `brew uninstall axe`.
