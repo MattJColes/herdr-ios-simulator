@@ -354,7 +354,8 @@ fn run(cli: Cli) -> R<()> {
                 Direction::Left => ((w * 0.8, cy), (w * 0.2, cy)),
                 Direction::Right => ((w * 0.2, cy), (w * 0.8, cy)),
             };
-            axe::swipe(&d.udid, from, to, 0.3)?;
+            // A steady half-screen drag: scrolls about half a page, or turns a page, the same every time.
+            axe::drag(&d.udid, from, to, 0.5)?;
             print(j, "swiped", json!({ "ok": true }));
         }
         Cmd::Button { button } => {
