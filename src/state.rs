@@ -119,7 +119,7 @@ pub fn since(spec: &str, events: &[Value], now: f64) -> R<f64> {
         .rev()
         .find(|e| e["kind"] == "mark" && e["detail"] == spec)
         .and_then(|e| e["t"].as_f64())
-        .ok_or_else(|| format!("no mark named {spec:?}; set one with `herdr-ios-simulator mark {spec:?}`").into())
+        .ok_or_else(|| format!("no mark named {spec:?}; set one with `herdr-ios mark {spec:?}`").into())
 }
 
 /// Local wall-clock `HH:MM:SS` for a unix time.

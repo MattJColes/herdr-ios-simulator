@@ -75,7 +75,7 @@ pub fn find<'a>(all: &'a [Device], q: &str) -> Option<&'a Device> {
 pub fn current(explicit: Option<&str>) -> R<Device> {
     let all = devices()?;
     if let Some(q) = explicit {
-        return find(&all, q).cloned().ok_or_else(|| format!("no simulator named {q:?}; see `herdr-ios-simulator devices`").into());
+        return find(&all, q).cloned().ok_or_else(|| format!("no simulator named {q:?}; see `herdr-ios devices`").into());
     }
     let cur = state::load().device;
     if let Some(d) = all.iter().find(|d| d.booted && Some(&d.udid) == cur.as_ref()) {
@@ -83,8 +83,8 @@ pub fn current(explicit: Option<&str>) -> R<Device> {
     }
     match all.iter().filter(|d| d.booted).collect::<Vec<_>>()[..] {
         [d] => Ok(d.clone()),
-        [] => Err("no simulator is booted; run `herdr-ios-simulator boot`".into()),
-        _ => Err("several simulators are booted; pass --device or run `herdr-ios-simulator boot <name>`".into()),
+        [] => Err("no simulator is booted; run `herdr-ios boot`".into()),
+        _ => Err("several simulators are booted; pass --device or run `herdr-ios boot <name>`".into()),
     }
 }
 
@@ -93,7 +93,7 @@ pub fn boot(cfg: &Config, q: Option<&str>) -> R<Device> {
     let all = devices()?;
     let last = state::load().device;
     let d = match q.or(cfg.default_device.as_deref()) {
-        Some(q) => find(&all, q).ok_or_else(|| format!("no simulator named {q:?}; see `herdr-ios-simulator devices`"))?,
+        Some(q) => find(&all, q).ok_or_else(|| format!("no simulator named {q:?}; see `herdr-ios devices`"))?,
         None => all
             .iter()
             .find(|d| Some(&d.udid) == last.as_ref())
@@ -144,9 +144,9 @@ pub fn terminate(d: &Device, bundle: &str) -> R<()> {
     state::event(&d.udid, "terminate", bundle)
 }
 
-pub fn openurl(d: &Device, url: &str) -> R<()> {
+pub fn deeplink(d: &Device, url: &str) -> R<()> {
     simctl(&["openurl", &d.udid, url])?;
-    state::event(&d.udid, "openurl", url)
+    state::event(&d.udid, "deeplink", url)
 }
 
 pub fn screenshot(d: &Device, path: &Path) -> R<()> {

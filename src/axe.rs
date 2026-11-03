@@ -118,8 +118,9 @@ fn frame(v: &Value) -> Option<[f64; 4]> {
     Some([f["x"].as_f64()?, f["y"].as_f64()?, f["width"].as_f64()?, f["height"].as_f64()?])
 }
 
-/// Flatten `describe-ui` JSON to the elements worth naming (labelled, valued or identified),
-/// plus the screen size in points from the root element.
+/// Flatten `describe-ui` JSON to the on-screen elements worth naming (labelled, valued or
+/// identified), plus the screen size in points from the root element. Elements whose centre is
+/// off screen (other home-screen pages, scrolled-away rows) can't be tapped, so they're left out.
 pub fn parse_tree(v: &Value) -> (Vec<Element>, Option<(f64, f64)>) {
     fn walk(v: &Value, out: &mut Vec<Element>) {
         for node in v.as_array().into_iter().flatten() {
@@ -137,6 +138,12 @@ pub fn parse_tree(v: &Value) -> (Vec<Element>, Option<(f64, f64)>) {
     let mut out = Vec::new();
     walk(v, &mut out);
     let screen = v.as_array().and_then(|a| a.first()).and_then(frame).map(|f| (f[2], f[3]));
+    if let Some((w, h)) = screen {
+        out.retain(|e| {
+            let (x, y) = e.center();
+            (0.0..=w).contains(&x) && (0.0..=h).contains(&y)
+        });
+    }
     (out, screen)
 }
 
@@ -153,11 +160,11 @@ pub fn describe(udid: &str) -> R<Vec<Element>> {
     Ok(els)
 }
 
-/// Element `n` (1-based) from the last `describe`.
+/// Element `n` (1-based) from the last `ui`.
 pub fn element(udid: &str, n: usize) -> R<Element> {
-    let s = std::fs::read_to_string(state::device_dir(udid).join("elements.json")).map_err(|_| "run `herdr-ios-simulator describe` first")?;
+    let s = std::fs::read_to_string(state::device_dir(udid).join("elements.json")).map_err(|_| "run `herdr-ios ui` first")?;
     let els: Vec<Element> = serde_json::from_str(&s)?;
-    n.checked_sub(1).and_then(|i| els.get(i)).cloned().ok_or_else(|| format!("no element [{n}]; run `herdr-ios-simulator describe` again").into())
+    n.checked_sub(1).and_then(|i| els.get(i)).cloned().ok_or_else(|| format!("no element [{n}]; run `herdr-ios ui` again").into())
 }
 
 /// Screen size in points, from the accessibility tree's root.
@@ -174,6 +181,7 @@ mod tests {
         json!([{ "type": "Application", "AXLabel": "MyApp", "frame": { "x": 0, "y": 0, "width": 402, "height": 874 },
             "children": [
                 { "type": "StaticText", "AXLabel": "Welcome", "frame": { "x": 150, "y": 100, "width": 100, "height": 30 }, "children": [] },
+                { "type": "Button", "AXLabel": "Maps", "frame": { "x": -377, "y": 88, "width": 168, "height": 191 }, "children": [] },
                 { "type": "Group", "AXLabel": "", "frame": { "x": 0, "y": 0, "width": 402, "height": 400 }, "children": [
                     { "type": "Button", "AXLabel": "Sign in", "AXUniqueId": "signIn", "frame": { "x": 100, "y": 300, "width": 200, "height": 44 } } ] }
             ] }])

@@ -1,5 +1,5 @@
-# herdr-ios-simulator: an iOS Simulator in a herdr pane. Agents drive it with the
-# `herdr-ios-simulator` CLI (simctl for devices, apps and logs; AXe for touch and video).
+# herdr-ios-simulator: an iOS Simulator in a herdr pane (the View). Agents drive it with the
+# `herdr-ios` CLI (simctl for devices, apps and logs; AXe for touch and video).
 
 id = "herdr-ios-simulator"
 name = "herdr-ios-simulator"
@@ -11,15 +11,15 @@ platforms = ["macos"]
 [[build]]
 command = ["cargo", "build", "--release"]
 
-# Put `herdr-ios-simulator` on PATH (~/.local/bin) so agents can call it; replaces its own symlink.
+# Put `herdr-ios` on PATH (~/.local/bin) so agents can call it; replaces its own symlink.
 [[startup]]
-command = ["./target/release/herdr-ios-simulator", "install-cli"]
+command = ["./target/release/herdr-ios", "install-cli"]
 
 [[panes]]
 id = "simulator"
 title = "Simulator"
 placement = "split"
-command = ["./target/release/herdr-ios-simulator", "pane"]
+command = ["./target/release/herdr-ios", "pane"]
 
 [[actions]]
 id = "open"
@@ -31,10 +31,10 @@ command = ["/bin/sh", "-c", "exec \"$HERDR_BIN_PATH\" plugin pane open --plugin 
 id = "shutdown"
 title = "Simulator: shut down"
 description = "Shut the current simulator down."
-command = ["./target/release/herdr-ios-simulator", "shutdown"]
+command = ["./target/release/herdr-ios", "shutdown"]
 
 [[actions]]
 id = "install-cli"
 title = "Simulator: install CLI"
-description = "Symlink herdr-ios-simulator into ~/.local/bin so agents can call it."
-command = ["./target/release/herdr-ios-simulator", "install-cli"]
+description = "Symlink herdr-ios into ~/.local/bin so agents can call it."
+command = ["./target/release/herdr-ios", "install-cli"]
