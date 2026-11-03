@@ -257,7 +257,7 @@ impl View {
         });
     }
 
-    /// The header's status text: a hovered button's name, else a recent message, else the hint.
+    /// The header's status text: a hovered button's name, else a recent message.
     fn status(&self) -> (String, Rgb) {
         if let Some(h) = self.hover.and_then(|c| self.hits.iter().find(|h| (h.x0..h.x1).contains(&c))) {
             return (h.act.describe().into(), FG);
@@ -265,7 +265,7 @@ impl View {
         if self.message_at.elapsed() < Duration::from_secs(6) {
             return (self.message.clone(), if self.message.starts_with("error") { ERR } else { OK });
         }
-        ("click to tap · drag to swipe · type to type".into(), DIM)
+        (String::new(), DIM)
     }
 
     /// Upload the icons (plain and hovered pill) as Kitty images; again after a resize.
