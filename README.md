@@ -2,7 +2,7 @@
 
 An iOS Simulator inside [herdr](https://herdr.dev). The simulator opens in a pane next to your coding agent, so you and your agent use the same device, and the agent can read every log, crash and event the app produces.
 
-> **Status: early, not yet released.** Tested end to end in herdr desktop 0.9.5 with Xcode 27 (iOS 27.2): the view, its buttons, the + menu and every CLI command below. See [docs/FEATURES.md](docs/FEATURES.md) for what's planned.
+> **Status: early.** Tested end to end in herdr desktop 0.9.5 with Xcode 27 (iOS 27.2): the view, its buttons, the + menu and every CLI command below. See [docs/FEATURES.md](docs/FEATURES.md) for what's planned.
 
 ![herdr desktop: Claude Code on the left, the iOS Simulator view on the right with Home, Lock, send screenshot, send errors and close buttons](docs/screenshots/herdr-desktop.png)
 
@@ -26,14 +26,16 @@ The agent builds with `xcodebuild` and gets back only the errors and warnings, w
 
 ## Requirements
 
-1. macOS with Xcode and an iOS runtime. Check with `xcrun simctl list devices available`.
-2. [AXe](https://github.com/cameroncooke/AXe) for taps, typing, the on-screen element list and the live view, because `simctl` has no input commands:
+1. [herdr](https://herdr.dev) 0.9.0 or later. herdr desktop gives you the + menu entry and header buttons; the terminal app works too.
+2. macOS with Xcode and an iOS runtime. Check with `xcrun simctl list devices available`.
+3. [AXe](https://github.com/cameroncooke/AXe) 1.8.0 or later for taps, typing, the on-screen element list and the live view, because `simctl` has no input commands. Xcode 27 needs 1.8.0 or later.
 
    ```sh
    brew install cameroncooke/axe/axe
    ```
 
-3. Rust (`cargo`), because herdr builds the plugin from source when it installs.
+4. Rust (`cargo`), because herdr builds the plugin from source when it installs.
+5. `~/.local/bin` on your `PATH`, so you and your agents can run `herdr-ios`. Check with `echo $PATH`.
 
 No Screen Recording or Accessibility permission is needed.
 
@@ -61,7 +63,15 @@ To have Claude Code, Codex, OpenCode and Pi reach for `herdr-ios` whenever you a
 herdr-ios install-agents
 ```
 
-This writes a Claude Code skill to `~/.claude/skills/herdr-ios-simulator/` and adds a short marked section to the other agents' global `AGENTS.md`. Running it again replaces that section rather than adding another.
+This writes a Claude Code skill to `~/.claude/skills/herdr-ios-simulator/` and adds a short marked section to the other agents' global `AGENTS.md`. Running it again replaces that section rather than adding another. herdr's command palette has the same thing as **Simulator: set up agents**.
+
+For any other agent, install the skill with the [skills](https://github.com/vercel-labs/skills) CLI, the same way herdr installs its own skill:
+
+```sh
+npx skills add MattJColes/herdr-ios-simulator -g
+```
+
+`herdr-ios skill` prints the skill, to paste into an agent that has no skill system.
 
 ## Update
 
@@ -133,6 +143,23 @@ fps = 15                           # live view frame rate, 1-30
 view_renderer = "blocks"           # if the view stays blank in your terminal
 cell_aspect = 2.6                  # if the device looks stretched
 ```
+
+## FAQ
+
+**`herdr-ios: command not found`**
+`~/.local/bin` isn't on your `PATH`, or herdr hasn't restarted since the install. Add it to your `PATH`, or run `herdr plugin action invoke herdr-ios-simulator.install-cli`.
+
+**`unknown command "describe-ui" for "axe"`**
+Another program called `axe` comes first in your `PATH` (Amazon's toolbox ships one). Install AXe with Homebrew as above: `herdr-ios` uses `/opt/homebrew/bin/axe` or `/usr/local/bin/axe` before anything else on `PATH`.
+
+**Taps take a second or more to land**
+AXe checks the device orientation before every touch, which takes about 1s on Xcode 27. [AXe PR #82](https://github.com/cameroncooke/AXe/pull/82) adds a way to skip it. `herdr-ios` uses it as soon as your AXe supports it, which cuts a tap to about 0.4s.
+
+**The view is blank or the device looks stretched**
+Set `view_renderer = "blocks"` or adjust `cell_aspect` in [Settings](#settings).
+
+**Which simulator does it use?**
+The one you last used, otherwise the newest iPhone. Pick one with `herdr-ios boot "iPhone 17"`, `--device NAME`, or `default_device` in [Settings](#settings).
 
 ## Development
 
