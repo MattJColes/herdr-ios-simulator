@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.0](https://github.com/MattJColes/herdr-ios-simulator/compare/v1.0.0...v1.1.0) (2026-11-03)
+
+
+### Features
+
+* set up CLI, desktop and agents on install ([4f47080](https://github.com/MattJColes/herdr-ios-simulator/commit/4f4708072328c16828dfb2a41b163811269c2e55))
+* set up CLI, desktop and agents on install ([9e16930](https://github.com/MattJColes/herdr-ios-simulator/commit/9e1693096d8c90748039051ae72432ec928208b1))
+
 ## [1.0.0](https://github.com/MattJColes/herdr-ios-simulator/compare/v0.1.0...v1.0.0) (2026-11-03)
 
 
