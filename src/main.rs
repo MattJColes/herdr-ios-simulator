@@ -148,13 +148,19 @@ enum Cmd {
     InstallCli,
     /// Teach Claude Code, Codex, OpenCode and Pi to use herdr-ios, in every project.
     InstallAgents,
-    /// Add "iOS Simulator" to herdr desktop's + menu.
-    InstallDesktop,
+    /// Add "iOS Simulator" to herdr desktop's + menu, and its own menu for a keyboard shortcut.
+    InstallDesktop {
+        /// Do nothing if herdr desktop isn't installed (herdr runs this at startup).
+        #[arg(long)]
+        if_present: bool,
+    },
     /// Started by herdr desktop's + menu: move into a split beside the last focused agent.
     #[command(hide = true)]
     MenuOpen,
     /// Print usage notes for agents.
     AgentHelp,
+    /// Print the agent skill (skills/herdr-ios-simulator/SKILL.md) for any coding agent.
+    Skill,
     /// The live view (herdr runs this in the pane).
     #[command(hide = true)]
     Pane,
@@ -481,13 +487,14 @@ fn run(cli: Cli) -> R<()> {
         }
         Cmd::InstallCli => print(j, install_cli()?, json!({ "ok": true })),
         Cmd::InstallAgents => print(j, agent_setup::install_agents()?, json!({ "ok": true })),
-        Cmd::InstallDesktop => print(j, host::install_desktop()?, json!({ "ok": true })),
+        Cmd::InstallDesktop { if_present } => print(j, host::install_desktop(if_present)?, json!({ "ok": true })),
         Cmd::MenuOpen => {
             if !host::split_beside_agent()? {
                 view::run(cfg, cli.device.as_deref())?
             }
         }
         Cmd::AgentHelp => println!("{AGENT_HELP}"),
+        Cmd::Skill => print!("{}", agent_setup::SKILL),
         Cmd::Pane => view::run(cfg, cli.device.as_deref())?,
     }
     Ok(())
