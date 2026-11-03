@@ -301,7 +301,7 @@ impl View {
             return (h.act.describe().into(), FG);
         }
         if let Some(p) = &self.pick {
-            return (format!("{p} · click it to tell the agent, Esc to cancel"), OK);
+            return (format!("{p} · click it · Esc cancels"), OK);
         }
         if self.message_at.elapsed() < Duration::from_secs(6) {
             return (self.message.clone(), if self.message.starts_with("error") { ERR } else { OK });
