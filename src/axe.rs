@@ -20,6 +20,17 @@ fn cmd(args: &[&str], udid: &str) -> Command {
     c
 }
 
+/// `--orientation portrait` when this AXe has it: without it AXe reads the accessibility tree
+/// and probes the orientation before every touch, about 1s each on Xcode 27.
+// shortcut: assumes a portrait device, like the rest of herdr-ios; pass the real orientation once the view supports rotation.
+fn orientation() -> &'static [&'static str] {
+    static HAS: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    let has = *HAS.get_or_init(|| {
+        Command::new(bin()).args(["tap", "--help"]).output().is_ok_and(|o| String::from_utf8_lossy(&o.stdout).contains("--orientation"))
+    });
+    if has { &["--orientation", "portrait"] } else { &[] }
+}
+
 fn run(args: &[&str], udid: &str) -> R<String> {
     let out = cmd(args, udid)
         .stdin(Stdio::null())
@@ -36,7 +47,8 @@ fn run(args: &[&str], udid: &str) -> R<String> {
 // drops on Xcode 27 (axe reports success, nothing happens); a real touch lands, and Home needs a
 // 0.2s hold (0.1s works only sometimes; Siri needs much longer).
 pub fn tap(udid: &str, x: f64, y: f64) -> R<()> {
-    run(&["tap", "-x", &format!("{x:.1}"), "-y", &format!("{y:.1}"), "--tap-style", "physical"], udid).map(drop)
+    let (x, y) = (format!("{x:.1}"), format!("{y:.1}"));
+    run(&[&["tap", "-x", &x, "-y", &y, "--tap-style", "physical"], orientation()].concat(), udid).map(drop)
 }
 
 /// A finger drag with explicit touch moves over `secs`: scrolls by about its length when
@@ -59,7 +71,7 @@ pub fn drag(udid: &str, from: (f64, f64), to: (f64, f64), secs: f64) -> R<()> {
         "--steps",
         &steps,
     ];
-    run(&args, udid).map(drop)
+    run(&[&args, orientation()].concat(), udid).map(drop)
 }
 
 pub fn type_text(udid: &str, text: &str) -> R<()> {
