@@ -2,9 +2,9 @@
 
 An iOS Simulator inside [herdr](https://herdr.dev). The simulator opens in a pane next to your coding agent, so you and your agent use the same device, and the agent can read every log, crash and event the app produces.
 
-> **Status: early, not yet released.** Tested end to end in herdr desktop 0.9.5 with Xcode 27 (iOS 27.2): the view, its buttons, and every CLI command below. The image below is a mockup. See [docs/FEATURES.md](docs/FEATURES.md) for what's planned.
+> **Status: early, not yet released.** Tested end to end in herdr desktop 0.9.5 with Xcode 27 (iOS 27.2): the view, its buttons, the + menu and every CLI command below. See [docs/FEATURES.md](docs/FEATURES.md) for what's planned.
 
-![Mockup: an agent in herdr fixing a Sign in bug, with the iOS Simulator and its log in the pane beside it](docs/screenshots/mockup.svg)
+![herdr desktop: Claude Code on the left, the iOS Simulator view on the right with Home, Lock, send screenshot, send errors and close buttons](docs/screenshots/herdr-desktop.png)
 
 | Agent runs `herdr-ios launch com.apple.Preferences` | then `herdr-ios ui` and `herdr-ios tap 10` |
 |---|---|
@@ -14,7 +14,7 @@ An iOS Simulator inside [herdr](https://herdr.dev). The simulator opens in a pan
 
 ### A view beside your agent
 
-Run **Simulator: open** from herdr, or let the agent run `herdr-ios boot --show`. The device boots without Simulator.app and appears in a view: a herdr pane beside your agent. Click to tap, drag to swipe, type to type. The header has icon buttons, in herdr desktop's style, for Home, Lock, send a screenshot to the agent, send the app's recent errors to the agent, and close.
+Pick **iOS Simulator** from herdr desktop's + menu, run **Simulator: open** from herdr, or let the agent run `herdr-ios boot --show`. The device boots without Simulator.app and appears in a view: a herdr pane beside your agent. Click to tap, drag to scroll (at the speed you drag, so a quick flick flings), scroll the wheel to scroll, type to type. The header has icon buttons, in herdr desktop's style, for Home, Lock, send a screenshot to the agent, send the app's recent errors to the agent, and close.
 
 ### Agents build, run and drive the app
 
@@ -49,6 +49,12 @@ herdr shows the commands the plugin will run, builds it with `cargo build --rele
 herdr plugin action invoke herdr-ios-simulator.install-cli
 ```
 
+For herdr desktop, add **iOS Simulator** to its + menu (it opens as a split beside your agent):
+
+```sh
+herdr-ios install-desktop
+```
+
 ## Update
 
 ```sh
@@ -69,6 +75,7 @@ That unregisters the plugin but leaves its link, settings and recorded state in 
 rm ~/.local/bin/herdr-ios
 rm -rf ~/.local/state/herdr/plugins/herdr-ios-simulator
 rm -rf ~/.config/herdr/plugins/config/herdr-ios-simulator
+rm ~/.config/herdr-app/icons/herdr-ios-simulator.svg   # and the herdr-ios-simulator entry in ~/.config/herdr-app/programs.json
 ```
 
 Your simulators and their apps are untouched. AXe stays installed until you run `brew uninstall axe`.
@@ -95,7 +102,7 @@ herdr-ios send screenshot                 # put it in an agent's prompt (default
 | Input | What it does |
 |---|---|
 | Click | Tap |
-| Drag | Swipe |
+| Drag | Scroll or swipe, replayed at the speed you dragged |
 | Scroll wheel | Scroll |
 | Typing, Return, Backspace, Tab | Sent to the focused field |
 | Header buttons | Home, Lock, send screenshot to agent, send errors to agent, close (hover for names) |

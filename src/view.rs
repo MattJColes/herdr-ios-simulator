@@ -71,7 +71,7 @@ struct Term;
 impl Term {
     fn enter() -> R<Term> {
         terminal::enable_raw_mode()?;
-        execute!(stdout(), terminal::EnterAlternateScreen, cursor::Hide, event::EnableMouseCapture)?;
+        execute!(stdout(), terminal::EnterAlternateScreen, cursor::Hide, event::EnableMouseCapture, terminal::SetTitle("iOS Simulator"))?;
         Ok(Term)
     }
 }

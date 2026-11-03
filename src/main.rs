@@ -137,6 +137,11 @@ enum Cmd {
     },
     /// Symlink this binary into ~/.local/bin.
     InstallCli,
+    /// Add "iOS Simulator" to herdr desktop's + menu.
+    InstallDesktop,
+    /// Started by herdr desktop's + menu: move into a split beside the last focused agent.
+    #[command(hide = true)]
+    MenuOpen,
     /// Print usage notes for agents.
     AgentHelp,
     /// The live view (herdr runs this in the pane).
@@ -436,6 +441,12 @@ fn run(cli: Cli) -> R<()> {
             print(j, format!("sent to {target}"), json!({ "agent": target }));
         }
         Cmd::InstallCli => print(j, install_cli()?, json!({ "ok": true })),
+        Cmd::InstallDesktop => print(j, host::install_desktop()?, json!({ "ok": true })),
+        Cmd::MenuOpen => {
+            if !host::split_beside_agent()? {
+                view::run(cfg, cli.device.as_deref())?
+            }
+        }
         Cmd::AgentHelp => println!("{AGENT_HELP}"),
         Cmd::Pane => view::run(cfg, cli.device.as_deref())?,
     }

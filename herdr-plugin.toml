@@ -46,6 +46,12 @@ description = "Send the app's errors and crashes from the last 5 minutes to an a
 command = ["./target/release/herdr-ios", "send", "errors"]
 
 [[actions]]
+id = "install-desktop"
+title = "Simulator: add to herdr desktop's + menu"
+description = "Add iOS Simulator to herdr desktop's + menu."
+command = ["./target/release/herdr-ios", "install-desktop"]
+
+[[actions]]
 id = "install-cli"
 title = "Simulator: install CLI"
 description = "Symlink herdr-ios into ~/.local/bin so agents can call it."
