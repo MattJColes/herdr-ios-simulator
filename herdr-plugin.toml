@@ -11,6 +11,18 @@ platforms = ["macos"]
 [[build]]
 command = ["cargo", "build", "--release"]
 
+# Set up straight away on install and update, rather than at herdr's next start. Non-fatal: a
+# failed build step aborts the install, and the startup hooks below retry the first two.
+[[build]]
+command = ["/bin/sh", "-c", "./target/release/herdr-ios install-cli || true"]
+
+[[build]]
+command = ["/bin/sh", "-c", "./target/release/herdr-ios install-desktop --if-present || true"]
+
+# Teach Claude Code, Codex, OpenCode and Pi to use herdr-ios (only those whose home folder exists).
+[[build]]
+command = ["/bin/sh", "-c", "./target/release/herdr-ios install-agents || true"]
+
 # Put `herdr-ios` on PATH (~/.local/bin) so agents can call it; replaces its own symlink.
 [[startup]]
 command = ["./target/release/herdr-ios", "install-cli"]

@@ -45,17 +45,13 @@ No Screen Recording or Accessibility permission is needed.
 herdr plugin install MattJColes/herdr-ios-simulator
 ```
 
-herdr shows the commands the plugin will run, builds it with `cargo build --release`, and links `herdr-ios` into `~/.local/bin` the next time herdr starts. To link it straight away:
+herdr shows the commands the plugin will run, builds it with `cargo build --release`, then sets it up:
 
-```sh
-herdr plugin action invoke herdr-ios-simulator.install-cli
-```
+- links `herdr-ios` into `~/.local/bin`
+- in herdr desktop, adds **iOS Simulator** to the + menu (it opens as a split beside your agent), plus its own menu: open the simulator, Home, send a screenshot or errors to the agent, set up agents, and shut down
+- teaches Claude Code, Codex, OpenCode and Pi to reach for `herdr-ios` whenever you ask to run or debug an iOS app, in every project (only the agents you have installed)
 
-In herdr desktop, the plugin adds **iOS Simulator** to the + menu (it opens as a split beside your agent), plus its own menu: open the simulator, Home, send a screenshot or errors to the agent, set up agents, and shut down. herdr does this each time it starts, so the entries follow updates. To do it straight away:
-
-```sh
-herdr-ios install-desktop
-```
+herdr also re-links the CLI and refreshes the desktop entries each time it starts. A failed step does not stop the install; to rerun one yourself: `herdr-ios install-cli`, `herdr-ios install-desktop` or `herdr-ios install-agents`.
 
 To open the iOS Simulator menu with a shortcut, add this to `~/.config/herdr-app/keys.json` under `"global"`:
 
@@ -63,13 +59,7 @@ To open the iOS Simulator menu with a shortcut, add this to `~/.config/herdr-app
 "cmd-shift-i": "mod.open:herdr-ios-simulator"
 ```
 
-To have Claude Code, Codex, OpenCode and Pi reach for `herdr-ios` whenever you ask to run or debug an iOS app, in every project:
-
-```sh
-herdr-ios install-agents
-```
-
-This writes a Claude Code skill to `~/.claude/skills/herdr-ios-simulator/` and adds a short marked section to the other agents' global `AGENTS.md`. Running it again replaces that section rather than adding another. herdr's command palette has the same thing as **Simulator: set up agents**.
+For agents, setup writes a Claude Code skill to `~/.claude/skills/herdr-ios-simulator/` and adds a short marked section to the other agents' global `AGENTS.md`. Running it again replaces that section rather than adding another. herdr's command palette has the same thing as **Simulator: set up agents**.
 
 For any other agent, install the skill with the [skills](https://github.com/vercel-labs/skills) CLI, the same way herdr installs its own skill:
 
@@ -85,7 +75,7 @@ npx skills add MattJColes/herdr-ios-simulator -g
 herdr plugin update herdr-ios-simulator
 ```
 
-This fetches the latest commit and rebuilds. A view that is already open keeps running the old build; close it and open it again to get the new one. The `~/.local/bin` link follows the new build after herdr's next start, or straight away with the `install-cli` action above.
+This fetches the latest commit and rebuilds. A view that is already open keeps running the old build; close it and open it again to get the new one. Updating runs the same setup again, so the link, desktop entries and agent instructions follow the new build.
 
 ## Uninstall
 
