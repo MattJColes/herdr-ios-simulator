@@ -1,6 +1,6 @@
 [package]
 name = "herdr-ios-simulator"
-version = "1.1.0"
+version = "1.1.1"
 edition = "2024"
 description = "An iOS Simulator in a herdr pane: a live view for you, and a CLI for agents to drive it and read its logs."
 license = "MIT"

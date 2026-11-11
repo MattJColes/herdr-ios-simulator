@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.1](https://github.com/MattJColes/herdr-ios-simulator/compare/v1.1.0...v1.1.1) (2026-11-11)
+
+
+### Bug Fixes
+
+* release patch versions for cargo dependency bumps ([167948f](https://github.com/MattJColes/herdr-ios-simulator/commit/167948f23cd49edec52e03ef1e446ef390dff023))
+* release patch versions for cargo dependency bumps ([b581e5c](https://github.com/MattJColes/herdr-ios-simulator/commit/b581e5c503dbc1bef4d200597fd6d8625baefcc8))
+
 ## [1.1.0](https://github.com/MattJColes/herdr-ios-simulator/compare/v1.0.0...v1.1.0) (2026-11-03)
 
 
