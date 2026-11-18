@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.1.2](https://github.com/MattJColes/herdr-ios-simulator/compare/v1.1.1...v1.1.2) (2026-11-18)
+
+
+### Bug Fixes
+
+* **deps:** bump resvg from 0.49.0 to 0.50.0 ([8986806](https://github.com/MattJColes/herdr-ios-simulator/commit/898680677939dd4a920d42844abccb75b7d0a427))
+* **deps:** bump resvg from 0.49.0 to 0.50.0 ([4bd064f](https://github.com/MattJColes/herdr-ios-simulator/commit/4bd064f2e7c170dc8e11c9fc5b6275cb8b3bb387))
+* preserve simulator proportions using terminal cell metrics ([a927fb7](https://github.com/MattJColes/herdr-ios-simulator/commit/a927fb732bcfc42d6b0e34bd5e4a15c83736d9d6))
+* preserve simulator proportions using terminal cell metrics ([bff2a0a](https://github.com/MattJColes/herdr-ios-simulator/commit/bff2a0a08e8cf81eb22af6fdebad5a3ec1843444))
+
 ## [1.1.1](https://github.com/MattJColes/herdr-ios-simulator/compare/v1.1.0...v1.1.1) (2026-11-11)
 
 
