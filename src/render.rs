@@ -65,16 +65,6 @@ pub fn parse_kitty_reply(buf: &[u8]) -> bool {
     String::from_utf8_lossy(buf).contains("\x1b_Gi=31;OK")
 }
 
-/// herdr desktop draws terminals itself while herdr-core answers `CSI 16 t` with a fixed
-/// 10x20, so derive cells from the app's font size (cells measured 8.4x22 px at 14 pt).
-fn desktop_cells() -> Option<Cells> {
-    let out = std::process::Command::new("herdr-app").arg("status").stdin(std::process::Stdio::null()).output().ok()?;
-    let st: serde_json::Value = serde_json::from_slice(&out.stdout).ok()?;
-    let fs = st["font_size"].as_f64()? * st["zoom"].as_f64().unwrap_or(1.0);
-    // Kitty images now sit on the same fractional grid as text, so image columns = text columns.
-    Some(Cells::from_px(fs * 0.6, fs * 22.0 / 14.0))
-}
-
 /// Read terminal replies until DA1 arrives or `timeout` passes, without leaving a reader
 /// behind: a thread blocked on stdin would later swallow the user's keys and clicks.
 fn read_replies(timeout: Duration) -> Vec<u8> {
@@ -120,11 +110,7 @@ fn query_terminal() -> (Cells, bool) {
 
 /// Cell metrics and the renderer to use; `view_renderer` / `cell_aspect` override.
 pub fn detect(cfg: &Config) -> (Cells, Renderer) {
-    let desktop = std::env::var_os("HC_TERMINAL_ID").is_some();
-    let (mut cells, kitty) = match desktop.then(desktop_cells).flatten() {
-        Some(c) => (c, true),
-        None => query_terminal(),
-    };
+    let (mut cells, kitty) = query_terminal();
     if let Some(k) = cfg.cell_aspect.filter(|k| *k > 0.5 && *k < 5.0) {
         cells.h = cells.w * k;
     }
@@ -235,6 +221,70 @@ pub fn blocks(out: &mut Vec<u8>, (w, h, rgb): (usize, usize, &[u8]), top_row: u1
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn herdr_uses_reported_cell_size() {
+        use std::os::unix::fs::PermissionsExt;
+        use std::process::{Command, Stdio};
+        use std::time::Instant;
+
+        const CHILD: &str = "HERDR_CELL_TEST_CHILD";
+        if std::env::var_os(CHILD).is_some() {
+            crossterm::terminal::enable_raw_mode().unwrap();
+            let (cells, renderer) = detect(&Config::default());
+            crossterm::terminal::disable_raw_mode().unwrap();
+            assert_eq!(cells, Cells::from_px(16.0, 36.0));
+            assert_eq!(renderer, Renderer::Kitty);
+            return;
+        }
+
+        // Keep a successful legacy status reply available: it must not replace terminal metrics.
+        let dir = std::env::temp_dir().join(format!("herdr-cell-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let status = dir.join("herdr-app");
+        std::fs::write(&status, "#!/bin/sh\nprintf '%s\\n' '{\"font_size\":14,\"zoom\":1}'\n").unwrap();
+        std::fs::set_permissions(&status, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let mut child = Command::new("/usr/bin/script")
+            .args(["-q", "/dev/null"])
+            .arg(std::env::current_exe().unwrap())
+            .args(["--exact", "render::tests::herdr_uses_reported_cell_size", "--nocapture"])
+            .env(CHILD, "1")
+            .env("HC_TERMINAL_ID", "test")
+            .env("PATH", format!("{}:{}", dir.display(), std::env::var("PATH").unwrap_or_default()))
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let mut output = child.stdout.take().unwrap();
+        let mut input = child.stdin.take().unwrap();
+        let reader = std::thread::spawn(move || {
+            let mut buf = Vec::new();
+            let mut byte = [0];
+            while output.read(&mut byte).unwrap_or(0) > 0 {
+                buf.push(byte[0]);
+                if buf.ends_with(b"\x1b[c") {
+                    input.write_all(b"\x1b[6;36;16t\x1b_Gi=31;OK\x1b\\\x1b[?62c").unwrap();
+                    input.flush().unwrap();
+                }
+            }
+            buf
+        });
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let success = loop {
+            if let Some(status) = child.try_wait().unwrap() {
+                break status.success();
+            }
+            if Instant::now() >= deadline {
+                child.kill().unwrap();
+                child.wait().unwrap();
+                break false;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        };
+        let output = reader.join().unwrap();
+        std::fs::remove_dir_all(dir).unwrap();
+        assert!(success, "{}", String::from_utf8_lossy(&output));
+    }
 
     #[test]
     fn wide_frames_fill_the_width() {
