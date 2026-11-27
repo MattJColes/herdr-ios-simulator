@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.3](https://github.com/MattJColes/herdr-ios-simulator/compare/v1.1.2...v1.1.3) (2026-11-27)
+
+
+### Bug Fixes
+
+* **deps:** bump the cargo-minor-and-patch group with 2 updates ([8600384](https://github.com/MattJColes/herdr-ios-simulator/commit/8600384f5953f2fa8106e4c12f4063f0850d3ed9))
+* **deps:** bump the cargo-minor-and-patch group with 2 updates ([5f9936e](https://github.com/MattJColes/herdr-ios-simulator/commit/5f9936e4665292bb4fcc590551ddb446e0054d81))
+
 ## [1.1.2](https://github.com/MattJColes/herdr-ios-simulator/compare/v1.1.1...v1.1.2) (2026-11-18)
 
 
